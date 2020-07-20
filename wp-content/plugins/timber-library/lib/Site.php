@@ -9,12 +9,12 @@ use Timber\Theme;
 use Timber\Helper;
 
 /**
- * TimberSite gives you access to information you need about your site. In Multisite setups, you can get info on other sites in your network.
+ * Timber\Site gives you access to information you need about your site. In Multisite setups, you can get info on other sites in your network.
  * @example
  * ```php
- * $context = Timber::get_context();
+ * $context = Timber::context();
  * $other_site_id = 2;
- * $context['other_site'] = new TimberSite($other_site_id);
+ * $context['other_site'] = new Timber\Site($other_site_id);
  * Timber::render('index.twig', $context);
  * ```
  * ```twig
@@ -55,11 +55,6 @@ class Site extends Core implements CoreInterface {
 	public $language;
 	/**
 	 * @api
-	 * @var string of language attributes for usage in the <html> tag
-	 */
-	public $language_attributes;
-	/**
-	 * @api
 	 * @var bool true if multisite, false if plain ole' WordPress
 	 */
 	public $multisite;
@@ -86,6 +81,8 @@ class Site extends Core implements CoreInterface {
 	 */
 	public $title;
 	public $url;
+	public $home_url;
+	public $site_url;
 
 	/**
 	 * @api
@@ -98,14 +95,14 @@ class Site extends Core implements CoreInterface {
 	public $atom;
 
 	/**
-	 * Constructs a TimberSite object
+	 * Constructs a Timber\Site object
 	 * @example
 	 * ```php
 	 * //multisite setup
-	 * $site = new TimberSite(1);
-	 * $site_two = new TimberSite("My Cool Site");
+	 * $site = new Timber\Site(1);
+	 * $site_two = new Timber\Site("My Cool Site");
 	 * //non-multisite
-	 * $site = new TimberSite();
+	 * $site = new Timber\Site();
 	 * ```
 	 * @param string|int $site_name_or_id
 	 */
@@ -163,7 +160,6 @@ class Site extends Core implements CoreInterface {
 		$this->title = $this->name;
 		$this->description = get_bloginfo('description');
 		$this->theme = new Theme();
-		$this->language_attributes = Helper::function_wrapper('language_attributes');
 		$this->multisite = false;
 	}
 
@@ -173,6 +169,8 @@ class Site extends Core implements CoreInterface {
 	 */
 	protected function init() {
 		$this->url = home_url();
+		$this->home_url = $this->url;
+		$this->site_url = site_url();
 		$this->rdf = get_bloginfo('rdf_url');
 		$this->rss = get_bloginfo('rss_url');
 		$this->rss2 = get_bloginfo('rss2_url');
@@ -180,7 +178,15 @@ class Site extends Core implements CoreInterface {
 		$this->language = get_bloginfo('language');
 		$this->charset = get_bloginfo('charset');
 		$this->pingback = $this->pingback_url = get_bloginfo('pingback_url');
-		$this->language_attributes = Helper::function_wrapper('language_attributes');
+	}
+
+
+	/**
+	 * Returns the language attributes that you're looking for
+	 * @return string
+	 */
+	public function language_attributes() {
+		return get_language_attributes();
 	}
 
 	/**
@@ -277,7 +283,7 @@ class Site extends Core implements CoreInterface {
 
 	/**
 	 * @deprecated 1.0.4
-	 * @see TimberSite::link
+	 * @see Timber\Site::link
 	 * @return string
 	 */
 	public function url() {

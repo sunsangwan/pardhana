@@ -1,0 +1,114 @@
+/*@font-face {
+  font-family: 'icomoon';
+  src:  url('../fonts/icomoon.eot?tojvbi');
+  src:  url('../fonts/icomoon.eot?tojvbi#iefix') format('embedded-opentype'),
+    url('../fonts/icomoon.woff2?tojvbi') format('woff2'),
+    url('../fonts/icomoon.ttf?tojvbi') format('truetype'),
+    url('../fonts/icomoon.woff?tojvbi') format('woff'),
+    url('../fonts/icomoon.svg?tojvbi#icomoon') format('svg');
+  font-weight: normal;
+  font-style: normal;
+}*/
+
+[class^="iconc-"], [class*=" iconc-"] {
+  /* use !important to prevent issues with browser extensions that change fonts */
+  font-family: 'icomoon' !important;
+  speak: none;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+
+  /* Better Font Rendering =========== */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.iconc-youtube-orange:before {
+  content: "\e900";
+}
+.iconc-footer:before {
+  content: "\e901";
+}
+.iconc-header:before {
+  content: "\e902";
+}
+.iconc-footer2:before {
+  content: "\e903";
+}
+.iconc-header2:before {
+  content: "\e904";
+}
+.iconc-footer3:before {
+  content: "\e905";
+}
+.iconc-header3:before {
+  content: "\e906";
+}
+.iconc-footer4:before {
+  content: "\e907";
+}
+.iconc-header4:before {
+  content: "\e908";
+}
+.iconc-footer5:before {
+  content: "\e909";
+}
+.iconc-header5:before {
+  content: "\e90a";
+}
+.iconc-arrow-down:before {
+  content: "\e90b";
+}
+.iconc-arrow-side:before {
+  content: "\e90c";
+}
+.iconc-back-to-top-arrow:before {
+  content: "\e90d";
+}
+.iconc-bullet:before {
+  content: "\e90e";
+}
+.iconc-dotted-line:before {
+  content: "\e90f";
+}
+.iconc-hamburger:before {
+  content: "\e910";
+}
+.iconc-linkedin:before {
+  content: "\e911";
+}
+.iconc-linkedin-orange:before {
+  content: "\e912";
+}
+.iconc-long-arrow:before {
+  content: "\e913";
+}
+.iconc-mail:before {
+  content: "\e914";
+}
+.iconc-marker:before {
+  content: "\e915";
+}
+.iconc-more:before {
+  content: "\e916";
+}
+.iconc-pvdb-logo:before {
+  content: "\e917";
+}
+.iconc-search:before {
+  content: "\e918";
+}
+.iconc-site-logowhite:before {
+  content: "\e919";
+}
+.iconc-star:before {
+  content: "\e91a";
+}
+.iconc-twitter:before {
+  content: "\e91b";
+}
+.iconc-twitter-orange:before {
+  content: "\e91c";
+}

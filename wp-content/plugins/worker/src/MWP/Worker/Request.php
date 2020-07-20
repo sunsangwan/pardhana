@@ -38,6 +38,34 @@ class MWP_Worker_Request
      */
     protected $signatureHeaderName = 'MWP-Signature';
 
+    /**
+     * Header that contains the name of the key used for signing.
+     * Must be compliant with {@link http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html RFC 2616}
+     *
+     * @var string
+     */
+    protected $keyNameHeaderName = 'MWP-Key-Name';
+
+    /**
+     * Header that contains the message signed by the corresponding service.
+     * Must be compliant with {@link http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html RFC 2616}
+     *
+     * @var string
+     */
+    protected $serviceSignatureHeaderName = 'MWP-Service-Signature';
+
+    protected $signatureNoHostHeaderName = 'MWP-Signature-G';
+
+    /**
+     * Header that contains the communication key.
+     * Must be compliant with {@link http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html RFC 2616}
+     *
+     * @var string
+     */
+    protected $communicationKeyHeaderName = 'MWP-Communication-Key';
+
+    protected $siteIdHeaderName = 'MWP-Site-Id';
+
     protected $protocolVersionHeaderName = 'MWP-Protocol';
 
     /**
@@ -165,15 +193,28 @@ class MWP_Worker_Request
         }
         $this->initialized = true;
 
-        $this->attributes['action']        = $this->getHeader($this->actionHeaderName);
-        $this->attributes['id']            = $this->getHeader($this->messageIdHeaderName);
-        $this->attributes['signature']     = base64_decode($this->getHeader($this->signatureHeaderName));
-        $this->attributes['data']          = null;
-        $this->attributes['params']        = null;
-        $this->attributes['setting']       = null;
-        $this->attributes['user']          = null;
-        $this->attributes['authenticated'] = false;
-        $this->attributes['protocol']      = (int) $this->getHeader($this->protocolVersionHeaderName);
+        $this->attributes['action']            = $this->getHeader($this->actionHeaderName);
+        $this->attributes['id']                = $this->getHeader($this->messageIdHeaderName);
+        $this->attributes['signature']         = base64_decode($this->getHeader($this->signatureHeaderName));
+        $this->attributes['key_name']          = $this->getHeader($this->keyNameHeaderName);
+        $this->attributes['service_signature'] = $this->getHeader($this->serviceSignatureHeaderName);
+        $this->attributes['no_host_signature'] = $this->getHeader($this->signatureNoHostHeaderName);
+        $this->attributes['communication_key'] = $this->getHeader($this->communicationKeyHeaderName);
+        $this->attributes['site_id']           = $this->getHeader($this->siteIdHeaderName);
+        $this->attributes['data']              = null;
+        $this->attributes['params']            = null;
+        $this->attributes['setting']           = null;
+        $this->attributes['user']              = null;
+        $this->attributes['authenticated']     = false;
+        $this->attributes['protocol']          = (int)$this->getHeader($this->protocolVersionHeaderName);
+
+        if (!empty($this->attributes['service_signature'])) {
+            $this->attributes['service_signature'] = base64_decode($this->attributes['service_signature']);
+        }
+
+        if (!empty($this->attributes['no_host_signature'])) {
+            $this->attributes['no_host_signature'] = base64_decode($this->attributes['no_host_signature']);
+        }
 
         // Do we have {"params":{...}} inside of body?
         if ($this->isMasterRequest() && is_array($data = json_decode($this->getContent(), true)) && array_key_exists('params', $data)) {
@@ -264,6 +305,46 @@ class MWP_Worker_Request
     public function getSignature()
     {
         return $this->attributes['signature'];
+    }
+
+    /**
+     * @return null|string
+     */
+    public function getKeyName()
+    {
+        return $this->attributes['key_name'];
+    }
+
+    /**
+     * @return null|string
+     */
+    public function getServiceSignature()
+    {
+        return $this->attributes['service_signature'];
+    }
+
+    /**
+     * @return null|string
+     */
+    public function getNoHostSignature()
+    {
+        return $this->attributes['no_host_signature'];
+    }
+
+    /**
+     * @return string
+     */
+    public function getCommunicationKey()
+    {
+        return !empty($this->attributes['communication_key']) ? $this->attributes['communication_key'] : '';
+    }
+
+    /**
+     * @return string
+     */
+    public function getSiteId()
+    {
+        return !empty($this->attributes['site_id']) ? $this->attributes['site_id'] : '';
     }
 
     /**

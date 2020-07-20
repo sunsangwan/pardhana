@@ -1,4 +1,5 @@
 <?php
+if (defined('WFWAF_VERSION') && !defined('WFWAF_RUN_COMPLETE')) {
 
 interface wfWAFRuleInterface {
 
@@ -27,6 +28,7 @@ class wfWAFRule implements wfWAFRuleInterface {
 	private $description;
 	private $whitelist;
 	private $action;
+	/** @var wfWAFRuleComparisonGroup */
 	private $comparisonGroup;
 	/**
 	 * @var wfWAF
@@ -97,6 +99,19 @@ class wfWAFRule implements wfWAFRuleInterface {
 		$this->setWhitelist($whitelist);
 		$this->setAction($action);
 		$this->setComparisonGroup($comparisonGroup);
+	}
+
+	public function __sleep() {
+		return array(
+			'ruleID',
+			'type',
+			'category',
+			'score',
+			'description',
+			'whitelist',
+			'action',
+			'comparisonGroup',
+		);
 	}
 
 	/**
@@ -294,6 +309,9 @@ RULE
 	 */
 	public function setWAF($waf) {
 		$this->waf = $waf;
+		if ($this->comparisonGroup) {
+			$this->comparisonGroup->setWAF($waf);
+		}
 	}
 }
 
@@ -332,6 +350,14 @@ class wfWAFRuleLogicalOperator implements wfWAFRuleInterface {
 		$this->setOperator($operator);
 		$this->setCurrentValue($currentValue);
 		$this->setComparison($comparison);
+	}
+
+	public function __sleep() {
+		return array(
+			'operator',
+			'currentValue',
+			'comparison',
+		);
 	}
 
 	/**
@@ -458,6 +484,24 @@ class wfWAFRuleComparison implements wfWAFRuleInterface {
 		'md5equals',
 		'filepatternsmatch',
 		'filehasphp',
+		'islocalurl',
+		'isremoteurl',
+		'isvalidurl',
+		'isnotvalidurl',
+		'urlhostequals',
+		'urlhostnotequals',
+		'urlhostmatches',
+		'urlhostnotmatches',
+		'urlschemeequals',
+		'urlschemenotequals',
+		'urlschemematches',
+		'urlschemenotmatches',
+		'versionequals',
+		'versionnotequals',
+		'versiongreaterthan',
+		'versiongreaterthanequalto',
+		'versionlessthan',
+		'versionlessthanequalto',
 	);
 
 	/**
@@ -489,6 +533,15 @@ class wfWAFRuleComparison implements wfWAFRuleInterface {
 		$this->setAction($action);
 		$this->setExpected($expected);
 		$this->setSubjects($subjects);
+	}
+
+	public function __sleep() {
+		return array(
+			'rule',
+			'action',
+			'expected',
+			'subjects',
+		);
 	}
 
 	/**
@@ -704,8 +757,20 @@ class wfWAFRuleComparison implements wfWAFRuleInterface {
 		$request = $this->getWAF()->getRequest();
 		$files = $request->getFiles();
 		$patterns = $this->getWAF()->getMalwareSignatures();
+		$commonStrings = $this->getWAF()->getMalwareSignatureCommonStrings();
 		if (!is_array($patterns) || !is_array($files)) {
 			return false;
+		}
+		
+		$backtrackLimit = ini_get('pcre.backtrack_limit');
+		if (is_numeric($backtrackLimit)) {
+			$backtrackLimit = (int) $backtrackLimit;
+			if ($backtrackLimit > 10000000) {
+				ini_set('pcre.backtrack_limit', 1000000);
+			}
+		}
+		else {
+			$backtrackLimit = false;
 		}
 		
 		foreach ($files as $file) {
@@ -716,6 +781,7 @@ class wfWAFRuleComparison implements wfWAFRuleInterface {
 				}
 				$totalRead = 0;
 				
+				$first = true;
 				$readsize = max(min(10 * 1024 * 1024, wfWAFUtils::iniSizeToBytes(ini_get('upload_max_filesize'))), 1 * 1024 * 1024);
 				while (!feof($fh)) {
 					$data = fread($fh, $readsize);
@@ -723,16 +789,41 @@ class wfWAFRuleComparison implements wfWAFRuleInterface {
 					if ($totalRead < 1) {
 						return false;
 					}
-				
-					foreach ($patterns as $rule) {
-						if (preg_match('/(' . $rule . ')/i', $data, $matches)) {
+					
+					$commonStringsChecked = array();
+					foreach ($patterns as $index => $rule) {
+						if (@preg_match('/' . $rule . '/iS', null) === false) {
+							continue; //This PCRE version can't compile the rule
+						}
+						
+						if (!$first && substr($rule, 0, 1) == '^') {
+							continue; //Signature only applies to file beginning
+						}
+						
+						if (isset($commonStrings[$index])) {
+							foreach ($commonStrings[$index] as $s) {
+								if (!isset($commonStringsChecked[$s])) {
+									$commonStringsChecked[$s] = (preg_match('/' . $s . '/iS', $data) == 1);
+								}
+								
+								if (!$commonStringsChecked[$s]) {
+									continue 2;
+								}
+							}
+						}
+						
+						if (preg_match('/(' . $rule . ')/iS', $data, $matches)) {
+							if ($backtrackLimit !== false) { ini_set('pcre.backtrack_limit', $backtrackLimit); }
 							return true;
 						}
 					}
+					
+					$first = false;
 				}	
 			}
 		}
 		
+		if ($backtrackLimit !== false) { ini_set('pcre.backtrack_limit', $backtrackLimit); }
 		return false;
 	}
 	
@@ -927,6 +1018,166 @@ class wfWAFRuleComparison implements wfWAFRuleInterface {
 	public function _resetErrorsHandler($errno, $errstr, $errfile, $errline) {
 		//Do nothing
 	}
+	
+	public function isLocalURL($subject) {
+		if (empty($subject)) {
+			return false;
+		}
+		
+		$parsed = wfWAFUtils::parse_url((string) $subject);
+		if (!isset($parsed['host'])) {
+			return true;
+		}
+		
+		$guessSiteURL = sprintf('%s://%s/', wfWAF::getInstance()->getRequest()->getProtocol(), wfWAF::getInstance()->getRequest()->getHost());
+		$siteURL = wfWAF::getInstance()->getStorageEngine()->getConfig('siteURL', null, 'synced') ? wfWAF::getInstance()->getStorageEngine()->getConfig('siteURL', null, 'synced') : $guessSiteURL;
+		$homeURL = wfWAF::getInstance()->getStorageEngine()->getConfig('homeURL', null, 'synced') ? wfWAF::getInstance()->getStorageEngine()->getConfig('homeURL', null, 'synced') : $guessSiteURL;
+		
+		$siteHost = wfWAFUtils::parse_url($siteURL, PHP_URL_HOST);
+		$homeHost = wfWAFUtils::parse_url($homeURL, PHP_URL_HOST);
+		
+		return (is_string($siteHost) && strtolower($parsed['host']) == strtolower($siteHost)) || (is_string($homeHost) && strtolower($parsed['host']) == strtolower($homeHost));
+	}
+	
+	public function isRemoteURL($subject) {
+		if (empty($subject)) {
+			return false;
+		}
+		
+		return !$this->isLocalURL($subject);
+	}
+	
+	public function isValidURL($subject) {
+		if ($subject === null) {
+			return false;
+		}
+		return wfWAFUtils::validate_url((string) $subject) !== false;
+	}
+	
+	public function isNotValidURL($subject) {
+		if ($subject === null) {
+			return false;
+		}
+		return !$this->isValidURL($subject);
+	}
+	
+	public function urlHostEquals($subject) {
+		if ($subject === null) {
+			return false;
+		}
+		$host = wfWAFUtils::parse_url((string) $subject, PHP_URL_HOST);
+		if (!is_string($host)) {
+			return wfWAFUtils::strlen($this->getExpected()) == 0;
+		}
+		
+		return strtolower($host) == strtolower($this->getExpected());
+	}
+	
+	public function urlHostNotEquals($subject) {
+		if ($subject === null) {
+			return false;
+		}
+		return !$this->urlHostEquals($subject);
+	}
+	
+	public function urlHostMatches($subject) {
+		if ($subject === null) {
+			return false;
+		}
+		$host = wfWAFUtils::parse_url((string) $subject, PHP_URL_HOST);
+		if (!is_string($host)) {
+			return false;
+		}
+		
+		return preg_match((string) $this->getExpected(), $host, $this->matches) > 0;
+	}
+	
+	public function urlHostNotMatches($subject) {
+		if ($subject === null) {
+			return false;
+		}
+		return !$this->urlHostMatches($subject);
+	}
+	
+	public function urlSchemeEquals($subject) {
+		if ($subject === null) {
+			return false;
+		}
+		$scheme = wfWAFUtils::parse_url((string) $subject, PHP_URL_SCHEME);
+		if (!is_string($scheme)) {
+			return wfWAFUtils::strlen($this->getExpected()) == 0;
+		}
+		
+		return strtolower($scheme) == strtolower($this->getExpected());
+	}
+	
+	public function urlSchemeNotEquals($subject) {
+		if ($subject === null) {
+			return false;
+		}
+		return !$this->urlSchemeEquals($subject);
+	}
+	
+	public function urlSchemeMatches($subject) {
+		if ($subject === null) {
+			return false;
+		}
+		$scheme = wfWAFUtils::parse_url((string) $subject, PHP_URL_SCHEME);
+		if (!is_string($scheme)) {
+			return false;
+		}
+		
+		return preg_match((string) $this->getExpected(), $scheme, $this->matches) > 0;
+	}
+	
+	public function urlSchemeNotMatches($subject) {
+		if ($subject === null) {
+			return false;
+		}
+		return !$this->urlSchemeMatches($subject);
+	}
+
+	public function versionEquals($subject) {
+		if ($subject === null) {
+			return false;
+		}
+		return version_compare($subject, $this->getExpected(), '==');
+	}
+
+	public function versionNotEquals($subject) {
+		if ($subject === null) {
+			return false;
+		}
+		return version_compare($subject, $this->getExpected(), '!=');
+	}
+
+	public function versionGreaterThan($subject) {
+		if ($subject === null) {
+			return false;
+		}
+		return version_compare($subject, $this->getExpected(), '>');
+	}
+
+	public function versionGreaterThanEqualTo($subject) {
+		if ($subject === null) {
+			return false;
+		}
+		return version_compare($subject, $this->getExpected(), '>=');
+	}
+
+	public function versionLessThan($subject) {
+		if ($subject === null) {
+			return false;
+		}
+		return version_compare($subject, $this->getExpected(), '<');
+	}
+
+	public function versionLessThanEqualTo($subject) {
+		if ($subject === null) {
+			return false;
+		}
+		return version_compare($subject, $this->getExpected(), '<=');
+	}
 
 	/**
 	 * @return mixed
@@ -1012,6 +1263,16 @@ class wfWAFRuleComparison implements wfWAFRuleInterface {
 	 */
 	public function setWAF($waf) {
 		$this->waf = $waf;
+		if (is_array($this->subjects)) {
+			foreach ($this->subjects as $subject) {
+				if (is_object($subject) && method_exists($subject, 'setWAF')) {
+					$subject->setWAF($waf);
+				}
+			}
+		}
+		if (is_object($this->expected) && method_exists($this->expected, 'setWAF')) {
+			$this->expected->setWAF($waf);
+		}
 	}
 
 	/**
@@ -1034,6 +1295,8 @@ class wfWAFRuleComparisonGroup implements wfWAFRuleInterface {
 	private $items = array();
 	private $failedComparisons = array();
 	private $result = false;
+	private $waf;
+
 	/**
 	 * @var wfWAFRule
 	 */
@@ -1044,6 +1307,12 @@ class wfWAFRuleComparisonGroup implements wfWAFRuleInterface {
 		foreach ($args as $arg) {
 			$this->add($arg);
 		}
+	}
+
+	public function __sleep() {
+		return array(
+			'items',
+		);
 	}
 
 	public function add($item) {
@@ -1211,6 +1480,25 @@ class wfWAFRuleComparisonGroup implements wfWAFRuleInterface {
 	public function setRule($rule) {
 		$this->rule = $rule;
 	}
+
+	/**
+	 * @return mixed
+	 */
+	public function getWAF() {
+		return $this->waf;
+	}
+
+	/**
+	 * @param mixed $waf
+	 */
+	public function setWAF($waf) {
+		$this->waf = $waf;
+		foreach ($this->items as $item) {
+			if (is_object($item) && method_exists($item, 'setWAF')) {
+				$item->setWAF($waf);
+			}
+		}
+	}
 }
 
 class wfWAFRuleComparisonFailure {
@@ -1246,6 +1534,17 @@ class wfWAFRuleComparisonFailure {
 		$this->setMultiplier($multiplier);
 		$this->setParamValue($paramValue);
 		$this->setMatches($matches);
+	}
+
+	public function __sleep() {
+		return array(
+			'paramKey',
+			'expected',
+			'action',
+			'multiplier',
+			'paramValue',
+			'matches',
+		);
 	}
 
 	/**
@@ -1368,6 +1667,13 @@ class wfWAFRuleComparisonSubject {
 		$this->waf = $waf;
 		$this->subject = $subject;
 		$this->filters = $filters;
+	}
+
+	public function __sleep() {
+		return array(
+			'subject',
+			'filters',
+		);
 	}
 
 	/**
@@ -1521,4 +1827,5 @@ class wfWAFRuleComparisonSubject {
 	public function setWAF($waf) {
 		$this->waf = $waf;
 	}
+}
 }

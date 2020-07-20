@@ -10,17 +10,18 @@ use Timber\Helper;
 use Timber\URLHelper;
 
 /**
- * Terms: WordPress has got 'em, you want 'em. Categories. Tags. Custom Taxonomies. You don't care, you're a fiend. Well let's get this under control
+ * Terms: WordPress has got 'em, you want 'em. Categories. Tags. Custom
+ * Taxonomies. You don't care, you're a fiend. Well let's get this under control:
  * @example
  * ```php
  * //Get a term by its ID
- * $context['term'] = new TimberTerm(6);
+ * $context['term'] = new Timber\Term(6);
  * //Get a term when on a term archive page
- * $context['term_page'] = new TimberTerm();
+ * $context['term_page'] = new Timber\Term();
  * //Get a term with a slug
- * $context['team'] = new TimberTerm('patriots');
+ * $context['team'] = new Timber\Term('patriots');
  * //Get a team with a slug from a specific taxonomy
- * $context['st_louis'] = new TimberTerm('cardinals', 'baseball');
+ * $context['st_louis'] = new Timber\Term('cardinals', 'baseball');
  * Timber::render('index.twig', $context);
  * ```
  * ```twig
@@ -36,7 +37,7 @@ use Timber\URLHelper;
  * <h3>Teams</h3>
  * <ul>
  *     <li>St. Louis Cardinals - Winner of 11 World Series</li>
- *     <li>New England Patriots - Winner of 4 Super Bowls</li>
+ *     <li>New England Patriots - Winner of 6 Super Bowls</li>
  * </ul>
  * ```
  */
@@ -88,6 +89,11 @@ class Term extends Core implements CoreInterface {
 	 * @return static
 	 */
 	public static function from( $tid, $taxonomy ) {
+		if ( is_array($tid) ) {
+			return array_map( function($term) use ($taxonomy) {
+				return new static($term, $taxonomy);
+			}, $tid);
+		}
 		return new static($tid, $taxonomy);
 	}
 
@@ -223,7 +229,7 @@ class Term extends Core implements CoreInterface {
 				$field_value = apply_filters('timber/term/meta/field', $field_value, $this->ID, $field_name, $this);
 			}
 			$this->$field_name = $field_value;
-			
+
 		}
 		return $this->$field_name;
 	}
@@ -247,24 +253,30 @@ class Term extends Core implements CoreInterface {
 	}
 
 	/**
-	 * Get Posts that have been "tagged" with the particular term
+	 * Get posts that have the current term assigned.
+	 *
 	 * @internal
-	 * @param int $numberposts
-	 * @param string $post_type
-	 * @param string $PostClass
+	 * @param int|array $numberposts_or_args Optional. Either the number of posts or an array of
+	 *                                       arguments for the post query that this method is going.
+	 *                                       to perform. Default `10`.
+	 * @param string    $post_type_or_class  Optional. Either the post type to get or the name of
+	 *                                       post class to use for the returned posts. Default
+	 *                                       `any`.
+	 * @param string    $post_class          Optional. The name of the post class to use for the
+	 *                                       returned posts. Default `Timber\Post`.
 	 * @return array|bool|null
 	 */
-	public function get_posts( $numberposts = 10, $post_type = 'any', $PostClass = '' ) {
-		if ( !strlen($PostClass) ) {
-			$PostClass = $this->PostClass;
-		}
+	public function get_posts( $numberposts_or_args = 10, $post_type_or_class = 'any', $post_class = '' ) {
+		if ( !strlen($post_class) ) {
+				$post_class = $this->PostClass;
+			}
 		$default_tax_query = array(array(
-			'field' => 'id',
+			'field' => 'term_id',
 			'terms' => $this->ID,
 			'taxonomy' => $this->taxonomy,
 		));
-		if ( is_string($numberposts) && strstr($numberposts, '=') ) {
-			$args = $numberposts;
+		if ( is_string( $numberposts_or_args) && strstr( $numberposts_or_args, '=') ) {
+			$args     = $numberposts_or_args;
 			$new_args = array();
 			parse_str($args, $new_args);
 			$args = $new_args;
@@ -272,29 +284,30 @@ class Term extends Core implements CoreInterface {
 			if ( !isset($args['post_type']) ) {
 				$args['post_type'] = 'any';
 			}
-			if ( class_exists($post_type) ) {
-				$PostClass = $post_type;
+			if ( class_exists($post_type_or_class) ) {
+				$post_class = $post_type_or_class;
 			}
-		} else if ( is_array($numberposts) ) {
+		} else if ( is_array( $numberposts_or_args) ) {
 			//they sent us an array already baked
-			$args = $numberposts;
+			$args = $numberposts_or_args;
 			if ( !isset($args['tax_query']) ) {
 				$args['tax_query'] = $default_tax_query;
 			}
-			if ( class_exists($post_type) ) {
-				$PostClass = $post_type;
+			if ( class_exists($post_type_or_class) ) {
+				$post_class = $post_type_or_class;
 			}
 			if ( !isset($args['post_type']) ) {
 				$args['post_type'] = 'any';
 			}
 		} else {
 			$args = array(
-				'numberposts' => $numberposts,
-				'tax_query' => $default_tax_query,
-				'post_type' => $post_type
+				'numberposts' => $numberposts_or_args,
+				'tax_query'   => $default_tax_query,
+				'post_type'   => $post_type_or_class
 			);
 		}
-		return Timber::get_posts($args, $PostClass);
+
+		return Timber::get_posts($args, $post_class);
 	}
 
 	/**
@@ -320,6 +333,7 @@ class Term extends Core implements CoreInterface {
 	 */
 	public function update( $key, $value ) {
 		$value = apply_filters('timber_term_set_meta', $value, $key, $this->ID, $this);
+		$value = apply_filters('timber/term/meta/set', $value, $key, $this->ID, $this);
 		$this->$key = $value;
 	}
 
@@ -358,7 +372,13 @@ class Term extends Core implements CoreInterface {
 
 
 	/**
+	 * Returns a full link to the term archive page like
+	 * `http://example.com/category/news`
 	 * @api
+	 * @example
+	 * ```twig
+	 * See all posts in: <a href="{{ term.link }}">{{ term.name }}</a>
+	 * ```
 	 * @return string
 	 */
 	public function link() {
@@ -368,8 +388,20 @@ class Term extends Core implements CoreInterface {
 	}
 
 	/**
+	 * Retrieves and outputs meta information stored with a term. This will use
+	 * both data stored under (old) ACF hacks and new (WP 4.6+) where term meta
+	 * has its own table. If retrieving a special ACF field (repeater, etc.) you
+	 * can use the output immediately in Twig — no further processing is
+	 * required.
 	 * @api
 	 * @param string $field_name
+	 * @example
+	 * ```twig
+	 * <div class="location-info">
+	 *   <h2>{{ term.name }}</h2>
+	 *   <p>{{ term.meta('address') }}</p>
+	 * </div>
+	 * ```
 	 * @return string
 	 */
 	public function meta( $field_name ) {
@@ -377,7 +409,13 @@ class Term extends Core implements CoreInterface {
 	}
 
 	/**
+	 * Returns a relative link (path) to the term archive page like
+	 * `/category/news`
 	 * @api
+	 * @example
+	 * ```twig
+	 * See all posts in: <a href="{{ term.path }}">{{ term.name }}</a>
+	 * ```
 	 * @return string
 	 */
 	public function path() {
@@ -388,19 +426,48 @@ class Term extends Core implements CoreInterface {
 	}
 
 	/**
+	 * Gets posts that have the current term assigned.
+	 *
 	 * @api
-	 * @param int $numberposts_or_args
-	 * @param string $post_type_or_class
-	 * @param string $post_class
 	 * @example
 	 * ```twig
-	 * <h4>Recent posts in {{term.name}}</h4>
+	 * <h4>Recent posts in {{ term.name }}</h4>
+	 *
 	 * <ul>
 	 * {% for post in term.posts(3, 'post') %}
-	 *     <li><a href="{{post.link}}">{{post.title}}</a></li>
+	 *     <li>
+	 *         <a href="{{ post.link }}">{{ post.title }}</a>
+	 *     </li>
 	 * {% endfor %}
 	 * </ul>
 	 * ```
+	 *
+	 * If you need more control over the query that is going to be performed, you can pass your
+	 * custom query arguments in the first parameter.
+	 *
+	 * ```twig
+	 * <h4>Our branches in {{ region.name }}</h4>
+	 *
+	 * <ul>
+	 * {% for branch in region.posts({
+	 *     posts_per_page: -1,
+	 *     orderby: 'menu_order'
+	 * }, 'branch', 'Branch') %}
+	 *     <li>
+	 *         <a href="{{ branch.link }}">{{ branch.title }}</a>
+	 *     </li>
+	 * {% endfor %}
+	 * </ul>
+	 * ```
+	 *
+	 * @param int|array $numberposts_or_args Optional. Either the number of posts or an array of
+	 *                                       arguments for the post query that this method is going.
+	 *                                       to perform. Default `10`.
+	 * @param string $post_type_or_class     Optional. Either the post type to get or the name of
+	 *                                       post class to use for the returned posts. Default
+	 *                                       `any`.
+	 * @param string $post_class             Optional. The name of the post class to use for the
+	 *                                       returned posts. Default `Timber\Post`.
 	 * @return array|bool|null
 	 */
 	public function posts( $numberposts_or_args = 10, $post_type_or_class = 'any', $post_class = '' ) {

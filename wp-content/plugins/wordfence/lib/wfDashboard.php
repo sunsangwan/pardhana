@@ -22,7 +22,6 @@ class wfDashboard {
 	
 	public $tdfCommunity;
 	public $tdfPremium;
-	public $tdfBlacklist;
 	
 	public $ips24h;
 	public $ips7d;
@@ -30,8 +29,6 @@ class wfDashboard {
 	
 	public $loginsSuccess;
 	public $loginsFail;
-	
-	public $blacklist7d;
 	
 	public $localBlocks;
 	
@@ -41,22 +38,14 @@ class wfDashboard {
 	
 	public $countriesLocal;
 	public $countriesNetwork;
-	
-	public static function updatePOSTParams() {
-		if (wfConfig::p()) {
-			global $wpdb;
-			$topIPs = $wpdb->get_col("SELECT DISTINCT IP FROM (SELECT IP FROM {$wpdb->prefix}wfBlockedIPLog WHERE unixday >= FLOOR(UNIX_TIMESTAMP() / 86400) - 7 AND unixday <= FLOOR(UNIX_TIMESTAMP() / 86400) AND blockType = 'blacklist' ORDER BY blockCount DESC LIMIT 50) AS t ORDER BY IP ASC");
-			$topIPs = base64_encode(implode('', $topIPs));
-			return array('topBlacklist' => $topIPs);
-		}
-		return array();
-	}
-	
-	/**
-	 * @param array $data The data, parsed from JSON, of the response from noc1.
-	 * @param bool|string $blacklistIPs The binary list of IPs that was sent for `topBlacklist` and that the `blacklistCounts` fields will correspond to.
-	 */
-	public static function processDashboardResponse($data, $blacklistIPs = false) {
+	public $wordfenceCentralConnected;
+	public $wordfenceCentralConnectTime;
+	public $wordfenceCentralConnectEmail;
+	public $wordfenceCentralDisconnected;
+	public $wordfenceCentralDisconnectTime;
+	public $wordfenceCentralDisconnectEmail;
+
+	public static function processDashboardResponse($data) {
 		if (isset($data['notifications'])) {
 			foreach ($data['notifications'] as $n) {
 				if (!isset($n['id']) || !isset($n['priority']) || !isset($n['html'])) {
@@ -69,27 +58,20 @@ class wfDashboard {
 			unset($data['notifications']);
 		}
 		
-		if (isset($data['blacklistCounts']) && is_string($blacklistIPs))  {
-			$rawCounts = @base64_decode($data['blacklistCounts']);
-			if ((wfUtils::strlen($rawCounts) / 4) == (wfUtils::strlen($blacklistIPs) / 16)) {
-				$blacklistCounts = array('updated' => time(), 'counts' => array());
-				$offsetIPs = 0;
-				$offsetCounts = 0;
-				while ($offsetIPs < wfUtils::strlen($blacklistIPs)) {
-					$ip = wfUtils::inet_ntop(wfUtils::substr($blacklistIPs, $offsetIPs, 16));
-					$countArr = @unpack('V', wfUtils::substr($rawCounts, $offsetCounts, 4));
-					$count = (int) @array_shift($countArr);
-					$blacklistCounts['counts'][] = array('ip' => $ip, 'network' => $count);
-					$offsetIPs += 16;
-					$offsetCounts += 4;
+		if (isset($data['revoked'])) {
+			foreach ($data['revoked'] as $r) {
+				if (!isset($r['id'])) {
+					continue;
 				}
-				$data['blacklistCounts'] = $blacklistCounts;
+				
+				$notification = wfNotification::getNotificationForID($r['id']);
+				if ($notification !== null) {
+					$notification->markAsRead();
+				}
 			}
-			else {
-				unset($data['blacklistCounts']);
-			}
+			
+			unset($data['revoked']);
 		}
-		
 		wfConfig::set_ser('dashboardData', $data);
 	}
 	
@@ -103,7 +85,7 @@ class wfDashboard {
 			$this->scanLastStatus = self::SCAN_SUCCESS;
 			
 			$i = new wfIssues();
-			$this->scanLastCompletion = (int) $i->getScanTime();
+			$this->scanLastCompletion = (int) wfScanner::shared()->lastScanTime();
 			$issueCount = $i->getIssueCount();
 			if ($issueCount) {
 				$this->scanLastStatus = self::SCAN_WARNINGS;
@@ -134,19 +116,7 @@ class wfDashboard {
 			}
 		}
 		
-		$this->features = array(
-			array('name' => 'Firewall', 'link' => network_admin_url('admin.php?page=WordfenceWAF'), 'state' => !(!WFWAF_ENABLED || (class_exists('wfWAFConfig') && wfWAFConfig::isDisabled())) ? self::FEATURE_ENABLED : self::FEATURE_DISABLED),
-			array('name' => 'Extended Protection', 'link' => network_admin_url('admin.php?page=WordfenceWAF'), 'state' => (!(!WFWAF_ENABLED || (class_exists('wfWAFConfig') && wfWAFConfig::isDisabled())) && WFWAF_AUTO_PREPEND) ? self::FEATURE_ENABLED : self::FEATURE_DISABLED),
-			array('name' => 'Real-time IP Blacklist', 'link' => network_admin_url('admin.php?page=WordfenceWAF'), 'state' => !wfConfig::get('isPaid') ? self::FEATURE_PREMIUM : (WFWAF_ENABLED && class_exists('wfWAFConfig') && !wfWAFConfig::get('disableWAFBlacklistBlocking') ? self::FEATURE_ENABLED : self::FEATURE_DISABLED)),
-			array('name' => 'Login Security', 'link' => network_admin_url('admin.php?page=WordfenceSecOpt#focus-loginSecurityEnabled'), 'state' => wfConfig::get('loginSecurityEnabled') ? self::FEATURE_ENABLED : self::FEATURE_DISABLED),
-			array('name' => 'Scheduled Scans', 'link' => network_admin_url('admin.php?page=WordfenceScan#top#scheduling'), 'state' => wordfence::getNextScanStartTimestamp() !== false && wfConfig::get('scheduledScansEnabled') ? self::FEATURE_ENABLED : self::FEATURE_DISABLED),
-			array('name' => 'Cellphone Sign-in', 'link' => network_admin_url('admin.php?page=WordfenceTools#top#twofactor'), 'state' => !wfConfig::get('isPaid') ? self::FEATURE_PREMIUM : (wfUtils::hasTwoFactorEnabled() ? self::FEATURE_ENABLED : self::FEATURE_DISABLED)),
-			array('name' => 'Live Traffic', 'link' => network_admin_url('admin.php?page=WordfenceActivity'), 'state' => wfConfig::liveTrafficEnabled() ? self::FEATURE_ENABLED : self::FEATURE_DISABLED),
-			array('name' => 'Country Blocking', 'link' => network_admin_url('admin.php?page=WordfenceBlocking#top#countryblocking'), 'state' => $countryBlocking),
-			array('name' => 'Rate Limiting', 'link' => network_admin_url('admin.php?page=WordfenceSecOpt#focus-firewallEnabled'), 'state' => wfConfig::get('firewallEnabled') ? self::FEATURE_ENABLED : self::FEATURE_DISABLED),
-			array('name' => 'Spamvertising Check', 'link' => network_admin_url('admin.php?page=WordfenceSecOpt#focus-spamvertizeCheck'), 'state' => !wfConfig::get('isPaid') ? self::FEATURE_PREMIUM : (wfConfig::get('spamvertizeCheck') ? self::FEATURE_ENABLED : self::FEATURE_DISABLED)),
-			array('name' => 'Spam Blacklist Check', 'link' => network_admin_url('admin.php?page=WordfenceSecOpt#focus-checkSpamIP'), 'state' => !wfConfig::get('isPaid') ? self::FEATURE_PREMIUM : (wfConfig::get('checkSpamIP') ? self::FEATURE_ENABLED : self::FEATURE_DISABLED)),
-		);
+		$this->features = array(); //Deprecated
 		
 		$data = wfConfig::get_ser('dashboardData');
 		$lastChecked = wfConfig::get('lastDashboardCheck', 0);
@@ -156,19 +126,10 @@ class wfDashboard {
 			$api = new wfAPI($apiKey, $wp_version);
 			wfConfig::set('lastDashboardCheck', time());
 			try {
-				if (isset($data['blacklistCounts']) && $data['blacklistCounts']['updated'] > (time() - 86400)) { //Preserve blacklist stats across hourly updates for 24 hours
-					$blacklistCounts = $data['blacklistCounts'];
-				}
-				
 				$json = $api->getStaticURL('/stats.json');
-				$updated = @json_decode($json, true);
-				if ($json && is_array($updated)) {
-					self::processDashboardResponse($updated);
-					$data = wfConfig::get_ser('dashboardData');
-					if (isset($blacklistCounts)) { //Re-insert blacklist stats
-						$data['blacklistCounts'] = $blacklistCounts;
-						wfConfig::set_ser('dashboardData', $data);
-					}
+				$data = @json_decode($json, true);
+				if ($json && is_array($data)) {
+					self::processDashboardResponse($data);
 				}
 			}
 			catch (Exception $e) {
@@ -182,10 +143,9 @@ class wfDashboard {
 		}
 		
 		// TDF
-		if (is_array($data) && isset($data['tdf']) && isset($data['tdf']['community']) && isset($data['tdf']['premium']) && isset($data['tdf']['blacklist'])) {
+		if (is_array($data) && isset($data['tdf']) && isset($data['tdf']['community'])) {
 			$this->tdfCommunity = (int) $data['tdf']['community'];
 			$this->tdfPremium = (int) $data['tdf']['premium'];
-			$this->tdfBlacklist = (int) $data['tdf']['blacklist'];
 		}
 		
 		// Top IPs Blocked
@@ -219,53 +179,23 @@ class wfDashboard {
 			}
 		}
 		
-		// Blacklist
-		if (is_array($data) && isset($data['blacklistCounts']) && wfConfig::p()) {
-			$this->blacklist7d = $data['blacklistCounts'];
-			$ips = array();
-			foreach ($this->blacklist7d['counts'] as $entry) {
-				$ips[] = wfUtils::inet_pton($entry['ip']);
-			}
-			
-			$localStats = $activityReport->getBlacklistBlockedStats(7, $ips);
-			foreach ($this->blacklist7d['counts'] as &$blacklistEntry) {
-				$local = 0;
-				$countryName = 'Unknown';
-				$countryCode = '';
-				foreach ($localStats as $l) {
-					if ($l['IP'] == wfUtils::inet_pton($blacklistEntry['ip'])) { 
-						$local = $l['blockCount'];
-						$countryName = $l['countryName'];
-						$countryCode = $l['countryCode'];
-						break;
-					}
-				}
-				$blacklistEntry['ip'] = $this->_obfuscateIP($blacklistEntry['ip']);
-				$blacklistEntry['local'] = $local;
-				$blacklistEntry['countryName'] = $countryName;
-				$blacklistEntry['countryCode'] = $countryCode;
-			}
-			
-			usort($this->blacklist7d['counts'], array($this, '_sortBlacklist'));
-		}
-		
 		// Local Attack Data
 		$this->localBlocks = array();
-		$this->localBlocks[] = array('title' => 'Complex', 
-									 '24h' => (int) $activityReport->getBlockedCount(1, wfActivityReport::BLOCK_TYPE_COMPLEX),
-									 '7d' => (int) $activityReport->getBlockedCount(7, wfActivityReport::BLOCK_TYPE_COMPLEX),
-									 '30d' => (int) $activityReport->getBlockedCount(30, wfActivityReport::BLOCK_TYPE_COMPLEX),
-									);
-		$this->localBlocks[] = array('title' => 'Brute Force',
-									 '24h' => (int) $activityReport->getBlockedCount(1, wfActivityReport::BLOCK_TYPE_BRUTE_FORCE),
-									 '7d' => (int) $activityReport->getBlockedCount(7, wfActivityReport::BLOCK_TYPE_BRUTE_FORCE),
-									 '30d' => (int) $activityReport->getBlockedCount(30, wfActivityReport::BLOCK_TYPE_BRUTE_FORCE),
-									);
-		$this->localBlocks[] = array('title' => 'Blacklist',
-									 '24h' => (int) $activityReport->getBlockedCount(1, wfActivityReport::BLOCK_TYPE_BLACKLIST),
-									 '7d' => (int) $activityReport->getBlockedCount(7, wfActivityReport::BLOCK_TYPE_BLACKLIST),
-									 '30d' => (int) $activityReport->getBlockedCount(30, wfActivityReport::BLOCK_TYPE_BLACKLIST),
-									);
+		$this->localBlocks[] = array('title' => __('Complex', 'wordfence'), 'type' => wfActivityReport::BLOCK_TYPE_COMPLEX,
+			'24h' => (int) $activityReport->getBlockedCount(1, wfActivityReport::BLOCK_TYPE_COMPLEX),
+			'7d' => (int) $activityReport->getBlockedCount(7, wfActivityReport::BLOCK_TYPE_COMPLEX),
+			'30d' => (int) $activityReport->getBlockedCount(30, wfActivityReport::BLOCK_TYPE_COMPLEX),
+		);
+		$this->localBlocks[] = array('title' => __('Brute Force', 'wordfence'), 'type' => wfActivityReport::BLOCK_TYPE_BRUTE_FORCE,
+			'24h' => (int) $activityReport->getBlockedCount(1, wfActivityReport::BLOCK_TYPE_BRUTE_FORCE),
+			'7d' => (int) $activityReport->getBlockedCount(7, wfActivityReport::BLOCK_TYPE_BRUTE_FORCE),
+			'30d' => (int) $activityReport->getBlockedCount(30, wfActivityReport::BLOCK_TYPE_BRUTE_FORCE),
+		);
+		$this->localBlocks[] = array('title' => __('Blacklist', 'wordfence'), 'type' => wfActivityReport::BLOCK_TYPE_BLACKLIST,
+			'24h' => (int) $activityReport->getBlockedCount(1, wfActivityReport::BLOCK_TYPE_BLACKLIST),
+			'7d' => (int) $activityReport->getBlockedCount(7, wfActivityReport::BLOCK_TYPE_BLACKLIST),
+			'30d' => (int) $activityReport->getBlockedCount(30, wfActivityReport::BLOCK_TYPE_BLACKLIST),
+		);
 		
 		// Network Attack Data
 		if (is_array($data) && isset($data['attackdata']) && isset($data['attackdata']['24h'])) {
@@ -292,24 +222,13 @@ class wfDashboard {
 			}
 			$this->countriesNetwork = $networkCountries;
 		}
-	}
-	
-	protected function _sortBlacklist($a, $b) {
-		if ($a['local'] == $b['local']) { return 0; }
-		if ($a['local'] < $b['local']) { return 1; }
-		return -1;
-	}
-	
-	protected function _obfuscateIP($ip) {
-		if (wfUtils::isIPv6MappedIPv4($ip)) {
-			$ip = substr($ip, strrpos($ip, ':') + 1);
-		}
-		
-		if (preg_match('/^(\d+)\.\d+\.\d+\.(\d+)$/', $ip, $matches)) {
-			return $matches[1] . '.x.x.' . $matches[2];
-		}
-		
-		$binIP = wfUtils::inet_pton($ip);
-		return bin2hex(wfUtils::substr($binIP, 0, 4)) . '::x::' . bin2hex(wfUtils::substr($binIP, -4));
+
+		// Wordfence Central
+		$this->wordfenceCentralConnected = wfCentral::_isConnected(); // This value is cached.
+		$this->wordfenceCentralConnectTime = wfConfig::get('wordfenceCentralConnectTime');
+		$this->wordfenceCentralConnectEmail = wfConfig::get('wordfenceCentralConnectEmail');
+		$this->wordfenceCentralDisconnected = wfConfig::get('wordfenceCentralDisconnected');
+		$this->wordfenceCentralDisconnectTime = wfConfig::get('wordfenceCentralDisconnectTime');
+		$this->wordfenceCentralDisconnectEmail = wfConfig::get('wordfenceCentralDisconnectEmail');
 	}
 }

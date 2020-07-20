@@ -55,7 +55,7 @@ class MWP_IncrementalBackup_Database_StreamableQuerySequenceDump
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;\n\n"
         ));
 
-        $allTables = MWP_Backup_ArrayHelper::arrayColumn($this->getConnection()->query('SHOW TABLES')->fetchAll());
+        $allTables = self::arrayColumn($this->getConnection()->query('SHOW TABLES')->fetchAll());
         $tables    = array_intersect($allTables, $this->options->getTables() ? $this->options->getTables() : $allTables);
 
         foreach ($tables as $tableName) {
@@ -230,14 +230,19 @@ class MWP_IncrementalBackup_Database_StreamableQuerySequenceDump
 
         foreach ($row as $columnName => $value) {
             $type = $columns[$columnName]['Type'];
+
+            // Used to determine if the column is enum in case some of the allowed values contain reserved type identifiers
+            $trimmedType = strtolower(trim($type));
+
             // If it should not be enclosed
             if ($value === null) {
                 $values[] = 'null';
-            } elseif (strpos($type, 'int') !== false
-                || strpos($type, 'float') !== false
-                || strpos($type, 'double') !== false
-                || strpos($type, 'decimal') !== false
-                || strpos($type, 'bool') !== false
+            } elseif (strpos($trimmedType, 'enum') !== 0 &&
+                (strpos($type, 'int') !== false
+                    || strpos($type, 'float') !== false
+                    || strpos($type, 'double') !== false
+                    || strpos($type, 'decimal') !== false
+                    || strpos($type, 'bool') !== false)
             ) {
                 $values[] = $value;
             } elseif (strpos($type, 'blob') !== false) {
@@ -248,5 +253,18 @@ class MWP_IncrementalBackup_Database_StreamableQuerySequenceDump
         }
 
         return $values;
+    }
+
+    private static function arrayColumn($array, $columnIndex = 0)
+    {
+        $result = array();
+        foreach ($array as $arr) {
+            if (!is_array($arr)) {
+                continue;
+            }
+            $arr = array_values($arr);
+            $result[] = $arr[$columnIndex];
+        }
+        return $result;
     }
 }

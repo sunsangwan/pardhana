@@ -41,23 +41,6 @@ class MMB_Installer extends MMB_Core
         }
     }
 
-    public function install_remote_files($params)
-    {
-        $data = array();
-        foreach ($params['plugins'] as $theme) {
-            $dataTmp           = $this->install_remote_file($theme);
-            $pluginName        = key($dataTmp);
-            $data[$pluginName] = $dataTmp;
-        }
-        foreach ($params['themes'] as $theme) {
-            $dataTmp          = $this->install_remote_file($theme);
-            $themeName        = key($dataTmp);
-            $data[$themeName] = $dataTmp;
-        }
-
-        return $data;
-    }
-
     public function install_remote_file($params)
     {
         global $wp_filesystem;
@@ -105,7 +88,7 @@ class MMB_Installer extends MMB_Core
             );
         }
 
-        if (!empty($activate) && defined('WP_ADMIN') && WP_ADMIN) {
+        if (defined('WP_ADMIN') && WP_ADMIN) {
             global $wp_current_filter;
             $wp_current_filter[] = 'load-update-core.php';
 
@@ -163,23 +146,25 @@ class MMB_Installer extends MMB_Core
 
                 $wp_themes = null;
                 unset($wp_themes); //prevent theme data caching
-                if (function_exists('wp_get_themes')) {
-                    $all_themes = wp_get_themes();
-                    foreach ($all_themes as $theme_name => $theme_data) {
-                        foreach ($install_info as $key => $install) {
-                            if (!$install || is_wp_error($install)) {
-                                continue;
-                            }
-
-                            if ($theme_data->Template == $install['destination_name']) {
-                                $wrongFileType = false;
-                                if ($activate) {
-                                    $install_info[$key]['activated'] = switch_theme($theme_data->Template, $theme_data->Stylesheet);
-                                }
-                                $install_info[$key]['full_name'] = $theme_data->name;
-                                $install_info[$key]['version']   = $theme_data->version;
-                            }
+                if (function_exists('wp_get_theme')) {
+                    foreach ($install_info as $key => $install) {
+                        if (!$install || is_wp_error($install)) {
+                            continue;
                         }
+
+                        $theme = wp_get_theme($install['destination_name']);
+                        if ($theme->errors() !== false) {
+                            $install_info[$key] = $theme->errors();
+                            continue;
+                        }
+
+                        $wrongFileType = false;
+                        if ($activate) {
+                            $install_info[$key]['activated'] = switch_theme($theme->Template, $theme->Stylesheet);
+                        }
+
+                        $install_info[$key]['full_name'] = $theme->name;
+                        $install_info[$key]['version']   = $theme->version;
                     }
                 } else {
                     $all_themes = get_themes();
@@ -189,7 +174,7 @@ class MMB_Installer extends MMB_Core
                                 continue;
                             }
 
-                            if ($theme_data['Template'] == $install['destination_name']) {
+                            if ($theme_data['Template'] == $install['destination_name'] || $theme_data['Stylesheet'] == $install['destination_name']) {
                                 $wrongFileType = false;
                                 if ($activate) {
                                     $install_info[$key]['activated'] = switch_theme($theme_data['Template'], $theme_data['Stylesheet']);
@@ -280,6 +265,11 @@ class MMB_Installer extends MMB_Core
             $plugin_files = array();
             $this->ithemes_updater_compatiblity();
             foreach ($upgrade_plugins as $plugin) {
+                if (isset($plugin['envatoPlugin']) && $plugin['envatoPlugin'] === true) {
+                    $upgrades['plugins'] = $this->upgrade_envato_component($plugin);
+                    continue;
+                }
+
                 if (isset($plugin['file'])) {
                     $plugin_files[$plugin['file']] = $plugin['old_version'];
                 } else {
@@ -295,6 +285,11 @@ class MMB_Installer extends MMB_Core
         if (!empty($upgrade_themes)) {
             $theme_temps = array();
             foreach ($upgrade_themes as $theme) {
+                if (isset($theme['envatoTheme']) && $theme['envatoTheme'] === true) {
+                    $upgrades['themes'] = $this->upgrade_envato_component($theme);
+                    continue;
+                }
+
                 if (isset($theme['theme_tmp'])) {
                     $theme_temps[] = $theme['theme_tmp'];
                 } else {
@@ -315,6 +310,36 @@ class MMB_Installer extends MMB_Core
         $this->mmb_maintenance_mode(false);
 
         return $upgrades;
+    }
+
+    /**
+     * @param array $component
+     *
+     * @return array
+     */
+    private function upgrade_envato_component(array $component)
+    {
+        $result = $this->install_remote_file($component);
+        $return = array();
+
+        if (empty($result)) {
+            return array(
+                'error' => 'Upgrade failed.',
+            );
+        }
+
+        foreach ($result as $component_slug => $component_info) {
+            if (!$component_info || is_wp_error($component_info)) {
+                $return[$component_slug] = $this->mmb_get_error($component_info);
+                continue;
+            }
+
+            $return[$component_info['destination_name']] = 1;
+        }
+
+        return array(
+            'upgraded' => $return,
+        );
     }
 
     /**
@@ -531,7 +556,8 @@ class MMB_Installer extends MMB_Core
                 }
 
                 return array(
-                    'upgraded' => $return,
+                    'upgraded'           => $return,
+                    'additional_updates' => $this->get_additional_plugin_updates($result),
                 );
             } else {
                 return array(
@@ -543,6 +569,52 @@ class MMB_Installer extends MMB_Core
                 'error' => 'WordPress update required first.',
             );
         }
+    }
+
+    private function get_additional_plugin_updates($plugin_upgrades)
+    {
+        if (empty($plugin_upgrades)) {
+            return array();
+        }
+
+        $additional_updates = array();
+
+        if (array_key_exists('woocommerce/woocommerce.php', $plugin_upgrades) && is_plugin_active('woocommerce/woocommerce.php') && $this->has_woocommerce_db_update()) {
+            $additional_updates['woocommerce/woocommerce.php'] = 1;
+        }
+
+        return $additional_updates;
+    }
+
+    private function has_woocommerce_db_update()
+    {
+        $current_db_version = get_option('woocommerce_db_version', null);
+        $current_wc_version = get_option('woocommerce_version');
+        if (version_compare($current_wc_version, '3.0.0', '<')) {
+            return true;
+        }
+
+        $latestUpdate = $this->get_wc_db_latest_update();
+
+        return !is_null($current_db_version) && !is_null($latestUpdate) &&
+            version_compare($current_db_version, $latestUpdate, '<');
+    }
+
+    private function get_wc_db_latest_update()
+    {
+        $regexp   = "{'(\d+\.)(\d+\.)(\d+)'}"; // version in single quote '1.0.0', '2.1.3', '3.1.22' etc
+        $fileName = WP_PLUGIN_DIR.'/woocommerce/includes/class-wc-install.php';
+
+        if (file_exists($fileName)) {
+            $fileContent = file_get_contents($fileName);
+            preg_match_all($regexp, $fileContent, $matches);
+
+            if (!empty($matches[0])) {
+                $latestUpdate = trim(end($matches[0]), "'");
+                return $latestUpdate;
+            }
+        }
+        return null;
     }
 
     public function upgrade_themes($themes = false)
@@ -562,7 +634,7 @@ class MMB_Installer extends MMB_Core
             $upgrader = new Theme_Upgrader(mwp_container()->getUpdaterSkin());
             $result   = $upgrader->bulk_upgrade($themes);
 
-            $return  = array();
+            $return = array();
             if (!empty($result)) {
                 foreach ($result as $theme_tmp => $theme_info) {
                     if (is_wp_error($theme_info) || empty($theme_info)) {
@@ -595,14 +667,17 @@ class MMB_Installer extends MMB_Core
         if (class_exists('Language_Pack_Upgrader')) {
             /** @handled class */
             $upgrader = new Language_Pack_Upgrader(mwp_container()->getUpdaterSkin());
-            $result = $upgrader->bulk_upgrade();
+            $result   = $upgrader->bulk_upgrade();
 
             if (!empty($result)) {
                 $return = 1;
-                foreach ($result as $translate_tmp => $translate_info) {
-                    if (is_wp_error($translate_info) || empty($translate_info)) {
-                        $return = $this->mmb_get_error($translate_info);
-                        break;
+
+                if (is_array($result)) {
+                    foreach ($result as $translate_tmp => $translate_info) {
+                        if (is_wp_error($translate_info) || empty($translate_info)) {
+                            $return = $this->mmb_get_error($translate_info);
+                            break;
+                        }
                     }
                 }
 
@@ -731,180 +806,6 @@ class MMB_Installer extends MMB_Core
         }
 
         return $updates;
-    }
-
-    public function get($args)
-    {
-        if (empty($args)) {
-            return false;
-        }
-
-        //Args: $items('plugins,'themes'), $type (active || inactive), $search(name string)
-
-        $return = array();
-        if (is_array($args['items']) && in_array('plugins', $args['items'])) {
-            $return['plugins'] = $this->get_plugins($args);
-        }
-        if (is_array($args['items']) && in_array('themes', $args['items'])) {
-            $return['themes'] = $this->get_themes($args);
-        }
-
-        return $return;
-    }
-
-    public function get_plugins($args)
-    {
-        if (empty($args)) {
-            return false;
-        }
-
-        $search = $args['search'];
-        $type   = trim((string)$args['type']);
-
-        if (!function_exists('get_plugins')) {
-            include_once ABSPATH.'wp-admin/includes/plugin.php';
-        }
-        $all_plugins = get_plugins();
-        $plugins     = array(
-            'active'   => array(),
-            'inactive' => array(),
-        );
-        if (is_array($all_plugins) && !empty($all_plugins)) {
-            $activated_plugins = get_option('active_plugins');
-            if (!$activated_plugins) {
-                $activated_plugins = array();
-            }
-
-            foreach ($all_plugins as $path => $plugin) {
-                if ($plugin['Name'] != 'ManageWP - Worker') {
-                    $status = in_array($path, $activated_plugins) ? 'active' : 'inactive';
-
-                    $plugin = array(
-                        'path'    => $path,
-                        'name'    => strip_tags($plugin['Name']),
-                        'version' => $plugin['Version'],
-                    );
-
-                    // If type is set, it must be equal to the current plugin status
-                    $typeMatches = empty($type)
-                        || (!empty($type) && strcasecmp($type, $status) == 0);
-
-                    // If search is set, the term must be found in the plugin name
-                    $searchTermFound = empty($search)
-                        || (!empty($search) && stripos($plugin['name'], $search) !== false);
-
-                    if ($typeMatches && $searchTermFound) {
-                        $plugins[$status][] = $plugin;
-                    }
-                }
-            }
-        }
-
-        return $plugins;
-    }
-
-    public function get_themes($args)
-    {
-        if (empty($args)) {
-            return false;
-        }
-
-        extract($args);
-
-        if (!function_exists('wp_get_themes')) {
-            include_once ABSPATH.WPINC.'/theme.php';
-        }
-        if (function_exists('wp_get_themes')) {
-            $all_themes = wp_get_themes();
-            $themes     = array(
-                'active'   => array(),
-                'inactive' => array(),
-            );
-
-            if (is_array($all_themes) && !empty($all_themes)) {
-                $current_theme = get_current_theme();
-
-                $br_a = 0;
-                $br_i = 0;
-                foreach ($all_themes as $theme_name => $theme) {
-                    if ($current_theme == strip_tags($theme->Name)) {
-                        $themes['active'][$br_a]['path']       = $theme->Template;
-                        $themes['active'][$br_a]['name']       = strip_tags($theme->Name);
-                        $themes['active'][$br_a]['version']    = $theme->Version;
-                        $themes['active'][$br_a]['stylesheet'] = $theme->Stylesheet;
-                        $br_a++;
-                    }
-
-                    if ($current_theme != strip_tags($theme->Name)) {
-                        $themes['inactive'][$br_i]['path']       = $theme->Template;
-                        $themes['inactive'][$br_i]['name']       = strip_tags($theme->Name);
-                        $themes['inactive'][$br_i]['version']    = $theme->Version;
-                        $themes['inactive'][$br_i]['stylesheet'] = $theme->Stylesheet;
-                        $br_i++;
-                    }
-                }
-
-                if ($search) {
-                    foreach ($themes['active'] as $k => $theme) {
-                        if (!stristr($theme['name'], $search)) {
-                            unset($themes['active'][$k]);
-                        }
-                    }
-
-                    foreach ($themes['inactive'] as $k => $theme) {
-                        if (!stristr($theme['name'], $search)) {
-                            unset($themes['inactive'][$k]);
-                        }
-                    }
-                }
-            }
-        } else {
-            $all_themes = get_themes();
-            $themes     = array(
-                'active'   => array(),
-                'inactive' => array(),
-            );
-
-            if (is_array($all_themes) && !empty($all_themes)) {
-                $current_theme = get_current_theme();
-
-                $br_a = 0;
-                $br_i = 0;
-                foreach ($all_themes as $theme_name => $theme) {
-                    if ($current_theme == $theme_name) {
-                        $themes['active'][$br_a]['path']       = $theme['Template'];
-                        $themes['active'][$br_a]['name']       = strip_tags($theme['Name']);
-                        $themes['active'][$br_a]['version']    = $theme['Version'];
-                        $themes['active'][$br_a]['stylesheet'] = $theme['Stylesheet'];
-                        $br_a++;
-                    }
-
-                    if ($current_theme != $theme_name) {
-                        $themes['inactive'][$br_i]['path']       = $theme['Template'];
-                        $themes['inactive'][$br_i]['name']       = strip_tags($theme['Name']);
-                        $themes['inactive'][$br_i]['version']    = $theme['Version'];
-                        $themes['inactive'][$br_i]['stylesheet'] = $theme['Stylesheet'];
-                        $br_i++;
-                    }
-                }
-
-                if ($search) {
-                    foreach ($themes['active'] as $k => $theme) {
-                        if (!stristr($theme['name'], $search)) {
-                            unset($themes['active'][$k]);
-                        }
-                    }
-
-                    foreach ($themes['inactive'] as $k => $theme) {
-                        if (!stristr($theme['name'], $search)) {
-                            unset($themes['inactive'][$k]);
-                        }
-                    }
-                }
-            }
-        }
-
-        return $themes;
     }
 
     public function edit($args)

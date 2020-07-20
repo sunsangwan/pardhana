@@ -14,7 +14,12 @@ function wpcf7_autop( $pee, $br = 1 ) {
 	$pee = preg_replace( '!(</' . $allblocks . '>)!', "$1\n\n", $pee );
 
 	/* wpcf7: take care of [response], [recaptcha], and [hidden] tags */
-	$block_hidden_form_tags = '(?:response|recaptcha|hidden)';
+	$form_tags_manager = WPCF7_FormTagsManager::get_instance();
+	$block_hidden_form_tags = $form_tags_manager->collect_tag_types(
+		array( 'display-block', 'display-hidden' ) );
+	$block_hidden_form_tags = sprintf( '(?:%s)',
+		implode( '|', $block_hidden_form_tags ) );
+
 	$pee = preg_replace( '!(\[' . $block_hidden_form_tags . '[^]]*\])!',
 		"\n$1\n\n", $pee );
 
@@ -51,7 +56,9 @@ function wpcf7_autop( $pee, $br = 1 ) {
 
 	if ( $br ) {
 		/* wpcf7: add textarea */
-		$pee = preg_replace_callback( '/<(script|style|textarea).*?<\/\\1>/s', create_function( '$matches', 'return str_replace("\n", "<WPPreserveNewline />", $matches[0]);' ), $pee );
+		$pee = preg_replace_callback(
+			'/<(script|style|textarea).*?<\/\\1>/s',
+			'wpcf7_autop_preserve_newline_callback', $pee );
 		$pee = preg_replace( '|(?<!<br />)\s*\n|', "<br />\n", $pee ); // optionally make line breaks
 		$pee = str_replace( '<WPPreserveNewline />', "\n", $pee );
 
@@ -71,6 +78,10 @@ function wpcf7_autop( $pee, $br = 1 ) {
 	$pee = preg_replace( "|\n</p>$|", '</p>', $pee );
 
 	return $pee;
+}
+
+function wpcf7_autop_preserve_newline_callback( $matches ) {
+	return str_replace( "\n", '<WPPreserveNewline />', $matches[0] );
 }
 
 function wpcf7_sanitize_query_var( $text ) {
@@ -153,7 +164,7 @@ function wpcf7_strip_newline( $str ) {
 
 function wpcf7_canonicalize( $text, $strto = 'lower' ) {
 	if ( function_exists( 'mb_convert_kana' )
-	&& 'UTF-8' == get_option( 'blog_charset' ) ) {
+	and 'UTF-8' == get_option( 'blog_charset' ) ) {
 		$text = mb_convert_kana( $text, 'asKV', 'UTF-8' );
 	}
 
@@ -198,7 +209,13 @@ function wpcf7_is_url( $url ) {
 }
 
 function wpcf7_is_tel( $tel ) {
-	$result = preg_match( '%^[+]?[0-9()/ -]*$%', $tel );
+	$pattern = '%^[+]?' // + sign
+		. '(?:\([0-9]+\)|[0-9]+)' // (1234) or 1234
+		. '(?:[/ -]*' // delimiter
+		. '(?:\([0-9]+\)|[0-9]+)' // (1234) or 1234
+		. ')*$%';
+
+	$result = preg_match( $pattern, trim( $tel ) );
 	return apply_filters( 'wpcf7_is_tel', $result, $tel );
 }
 
@@ -299,7 +316,8 @@ function wpcf7_is_email_in_site_domain( $email ) {
 	$home_url = home_url();
 
 	// for interoperability with WordPress MU Domain Mapping plugin
-	if ( is_multisite() && function_exists( 'domain_mapping_siteurl' ) ) {
+	if ( is_multisite()
+	and function_exists( 'domain_mapping_siteurl' ) ) {
 		$domain_mapping_siteurl = domain_mapping_siteurl( false );
 
 		if ( $domain_mapping_siteurl ) {
@@ -311,7 +329,7 @@ function wpcf7_is_email_in_site_domain( $email ) {
 		$site_domain = strtolower( $matches[1] );
 
 		if ( $site_domain != strtolower( $_SERVER['SERVER_NAME'] )
-		&& wpcf7_is_email_in_domain( $email, $site_domain ) ) {
+		and wpcf7_is_email_in_domain( $email, $site_domain ) ) {
 			return true;
 		}
 	}
@@ -320,7 +338,7 @@ function wpcf7_is_email_in_site_domain( $email ) {
 }
 
 function wpcf7_antiscript_file_name( $filename ) {
-	$filename = basename( $filename );
+	$filename = wp_basename( $filename );
 	$parts = explode( '.', $filename );
 
 	if ( count( $parts ) < 2 ) {

@@ -4,15 +4,17 @@ namespace Timber;
 
 use Timber\Image;
 use Timber\Image\Operation\ToJpg;
+use Timber\Image\Operation\ToWebp;
 use Timber\Image\Operation\Resize;
 use Timber\Image\Operation\Retina;
 use Timber\Image\Operation\Letterbox;
 
 use Timber\URLHelper;
+use Timber\PathHelper;
 
 /**
  * Implements the Twig image filters:
- * https://github.com/timber/timber/wiki/Image-cookbook#arbitrary-resizing-of-images
+ * https://timber.github.io/docs/guides/cookbook-images/#arbitrary-resizing-of-images
  * - resize
  * - retina
  * - letterbox
@@ -28,10 +30,14 @@ class ImageHelper {
 	const BASE_UPLOADS = 1;
 	const BASE_CONTENT = 2;
 
+	static $home_url;
+
 	public static function init() {
-		self::add_constants();
-		self::add_actions();
-		self::add_filters();
+		self::$home_url = get_home_url();
+		add_action('delete_attachment', array(__CLASS__, 'delete_attachment'));
+		add_filter('wp_generate_attachment_metadata', array(__CLASS__, 'generate_attachment_metadata'), 10, 2);
+		add_filter('upload_dir', array(__CLASS__, 'add_relative_upload_dir_key'), 10, 2);
+		return true;
 	}
 
 	/**
@@ -138,6 +144,39 @@ class ImageHelper {
 	}
 
 	/**
+	 * Checks if file is an SVG.
+	 *
+	 * @param string $file_path File path to check.
+	 * @return bool True if SVG, false if not SVG or file doesn't exist.
+	 */
+	public static function is_svg( $file_path ) {
+		if ( ! isset( $file_path ) || '' === $file_path || ! file_exists( $file_path ) ) {
+			return false;
+		}
+
+		if ( TextHelper::ends_with( strtolower($file_path), '.svg' ) ) {
+			return true;
+		}
+
+		/**
+		 * Try reading mime type.
+		 *
+		 * SVG images are not allowed by default in WordPress, so we have to pass a default mime
+		 * type for SVG images.
+		 */
+		$mime = wp_check_filetype_and_ext( $file_path, PathHelper::basename( $file_path ), array(
+			'svg' => 'image/svg+xml',
+		) );
+
+		return in_array( $mime['type'], array(
+			'image/svg+xml',
+			'text/html',
+			'text/plain',
+			'image/svg',
+		) );
+	}
+
+	/**
 	 * Generate a new image with the specified dimensions.
 	 * New dimensions are achieved by adding colored bands to maintain ratio.
 	 *
@@ -148,7 +187,7 @@ class ImageHelper {
 	 * @param bool    $force
 	 * @return string
 	 */
-	public static function letterbox( $src, $w, $h, $color = '#000000', $force = false ) {
+	public static function letterbox( $src, $w, $h, $color = false, $force = false ) {
 		$op = new Letterbox($w, $h, $color);
 		return self::_operate($src, $op, $force);
 	}
@@ -165,45 +204,58 @@ class ImageHelper {
 		return self::_operate($src, $op, $force);
 	}
 
-	/**
-	 * Deletes all resized versions of an image when the source is deleted
-	 * or its meta data is regenerated
-	 */
-	protected static function add_actions() {
-		add_action('delete_attachment', function( $post_id ) {
-			\Timber\ImageHelper::_delete_generated_if_image($post_id);
-		} );
-		add_filter('wp_generate_attachment_metadata', function( $metadata, $post_id ) {
-			\Timber\ImageHelper::_delete_generated_if_image($post_id);
-			return $metadata;
-		}, 10, 2);
-	}
-
-	/**
-	 * Adds a constant defining the path to the content directory relative to the site
-	 * for example /wp-content or /content
-	 */
-	protected static function add_constants() {
-		if ( !defined('WP_CONTENT_SUBDIR') ) {
-			$wp_content_path = str_replace(get_home_url(), '', WP_CONTENT_URL);
-			define('WP_CONTENT_SUBDIR', $wp_content_path);
-		}
-	}
-
-	/**
-	 * adds a 'relative' key to wp_upload_dir() result.
-	 * It will contain the relative url to upload dir.
-	 * @return void
-	 */
-	static function add_filters() {
-		add_filter('upload_dir', function( $arr ) {
-			$arr['relative'] = str_replace(get_home_url(), '', $arr['baseurl']);
-			return $arr;
-		} );
-	}
+    /**
+     * Generates a new image by converting the source into WEBP if supported by the server
+     *
+     * @param string  $src      a url or path to the image (http://example.org/wp-content/uploads/2014/image.webp)
+     *							or (/wp-content/uploads/2014/image.jpg)
+     *							If webp is not supported, a jpeg image will be generated
+	 * @param int     $quality  ranges from 0 (worst quality, smaller file) to 100 (best quality, biggest file)
+     * @param bool    $force
+     */
+    public static function img_to_webp( $src, $quality = 80, $force = false ) {
+        $op = new Image\Operation\ToWebp($quality);
+        return self::_operate($src, $op, $force);
+    }
 
 	//-- end of public methods --//
 
+	/**
+	 * Deletes all resized versions of an image when the source is deleted.
+	 *
+	 * @since 1.5.0
+	 * @param int   $post_id an attachment post id
+	 */
+	public static function delete_attachment( $post_id ) {
+		self::_delete_generated_if_image($post_id);
+	}
+
+
+	/**
+	 * Delete all resized version of an image when its meta data is regenerated.
+	 *
+	 * @since 1.5.0
+	 * @param array $metadata
+	 * @param int   $post_id an attachment post id
+	 * @return array
+	 */
+	public static function generate_attachment_metadata( $metadata, $post_id ) {
+		self::_delete_generated_if_image($post_id);
+		return $metadata;
+	}
+
+	/**
+	 * Adds a 'relative' key to wp_upload_dir() result.
+	 * It will contain the relative url to upload dir.
+	 *
+	 * @since 1.5.0
+	 * @param array $arr
+	 * @return array
+	 */
+	public static function add_relative_upload_dir_key( $arr ) {
+		$arr['relative'] = str_replace(self::$home_url, '', $arr['baseurl']);
+		return $arr;
+	}
 
 	/**
 	 * Checks if attachment is an image before deleting generated files
@@ -230,7 +282,7 @@ class ImageHelper {
 		if ( URLHelper::is_absolute($local_file) ) {
 			$local_file = URLHelper::url_to_file_system($local_file);
 		}
-		$info = pathinfo($local_file);
+		$info = PathHelper::pathinfo($local_file);
 		$dir = $info['dirname'];
 		$ext = $info['extension'];
 		$filename = $info['filename'];
@@ -256,9 +308,12 @@ class ImageHelper {
 	 */
 	protected static function process_delete_generated_files( $filename, $ext, $dir, $search_pattern, $match_pattern = null ) {
 		$searcher = '/'.$filename.$search_pattern;
-		foreach ( glob($dir.$searcher) as $found_file ) {
-			$regexdir = str_replace('/', '\/', $dir);
-			$pattern = '/'.($regexdir).'\/'.$filename.$match_pattern.$ext.'/';
+		$files = glob($dir.$searcher);
+		if ( $files === false || empty($files) ) {
+			return;
+		}
+		foreach ( $files as $found_file ) {
+			$pattern = '/'.preg_quote($dir, '/').'\/'.preg_quote($filename, '/').$match_pattern.preg_quote($ext, '/').'/';
 			$match = preg_match($pattern, $found_file);
 			if ( !$match_pattern || $match ) {
 				unlink($found_file);
@@ -273,7 +328,7 @@ class ImageHelper {
 	 * @return string
 	 */
 	public static function get_server_location( $url ) {
-		// if we're already an absolute dir, just return
+		// if we're already an absolute dir, just return.
 		if ( 0 === strpos($url, ABSPATH) ) {
 			return $url;
 		}
@@ -294,7 +349,7 @@ class ImageHelper {
 		$dir = $upload['path'];
 		$filename = $file;
 		$file = parse_url($file);
-		$path_parts = pathinfo($file['path']);
+		$path_parts = PathHelper::pathinfo($file['path']);
 		$basename = md5($filename);
 		$ext = 'jpg';
 		if ( isset($path_parts['extension']) ) {
@@ -321,7 +376,7 @@ class ImageHelper {
 		$tmp = download_url($file);
 		preg_match('/[^\?]+\.(jpe?g|jpe|gif|png)\b/i', $file, $matches);
 		$file_array = array();
-		$file_array['name'] = basename($matches[0]);
+		$file_array['name'] = PathHelper::basename($matches[0]);
 		$file_array['tmp_name'] = $tmp;
 		// If error storing temporarily, unlink
 		if ( is_wp_error($tmp) ) {
@@ -329,7 +384,7 @@ class ImageHelper {
 			$file_array['tmp_name'] = '';
 		}
 		// do the validation and storage stuff
-		$locinfo = pathinfo($loc);
+		$locinfo = PathHelper::pathinfo($loc);
 		$file = wp_upload_bits($locinfo['basename'], null, file_get_contents($file_array['tmp_name']));
 		return $file['url'];
 	}
@@ -354,31 +409,31 @@ class ImageHelper {
 		);
 		$upload_dir = wp_upload_dir();
 		$tmp = $url;
-		if ( 0 === strpos($tmp, ABSPATH) || 0 === strpos($tmp, '/srv/www/') ) {
+		if ( TextHelper::starts_with($tmp, ABSPATH) || TextHelper::starts_with($tmp, '/srv/www/') ) {
 			// we've been given a dir, not an url
 			$result['absolute'] = true;
-			if ( 0 === strpos($tmp, $upload_dir['basedir']) ) {
+			if ( TextHelper::starts_with($tmp, $upload_dir['basedir']) ) {
 				$result['base'] = self::BASE_UPLOADS; // upload based
-				$tmp = str_replace($upload_dir['basedir'], '', $tmp);
+				$tmp = URLHelper::remove_url_component($tmp, $upload_dir['basedir']);
 			}
-			if ( 0 === strpos($tmp, WP_CONTENT_DIR) ) {
+			if ( TextHelper::starts_with($tmp, WP_CONTENT_DIR) ) {
 				$result['base'] = self::BASE_CONTENT; // content based
-				$tmp = str_replace(WP_CONTENT_DIR, '', $tmp);
+				$tmp = URLHelper::remove_url_component($tmp, WP_CONTENT_DIR);
 			}
 		} else {
 			if ( !$result['absolute'] ) {
-				$tmp = site_url().$tmp;
+				$tmp = untrailingslashit(network_home_url()).$tmp;
 			}
-			if ( 0 === strpos($tmp, $upload_dir['baseurl']) ) {
+			if ( URLHelper::starts_with($tmp, $upload_dir['baseurl']) ) {
 				$result['base'] = self::BASE_UPLOADS; // upload based
-				$tmp = str_replace($upload_dir['baseurl'], '', $tmp);
-			} else if ( 0 === strpos($tmp, content_url()) ) {
+				$tmp = URLHelper::remove_url_component($tmp, $upload_dir['baseurl']);
+			} else if ( URLHelper::starts_with($tmp, content_url()) ) {
 				$result['base'] = self::BASE_CONTENT; // content-based
 				$tmp = self::theme_url_to_dir($tmp);
-				$tmp = str_replace(WP_CONTENT_DIR, '', $tmp);
+				$tmp = URLHelper::remove_url_component($tmp, WP_CONTENT_DIR);
 			}
 		}
-		$parts = pathinfo($tmp);
+		$parts = PathHelper::pathinfo($tmp);
 		$result['subdir'] = ($parts['dirname'] === '/') ? '' : $parts['dirname'];
 		$result['filename'] = $parts['filename'];
 		$result['extension'] = strtolower($parts['extension']);
@@ -402,10 +457,24 @@ class ImageHelper {
 		return $tmp;
 	}
 
+	/**
+	 * Checks if uploaded image is located in theme.
+	 *
+	 * @param string $path image path.
+	 * @return bool     If the image is located in the theme directory it returns true.
+	 *                  If not or $path doesn't exits it returns false.
+	 */
 	protected static function is_in_theme_dir( $path ) {
-		$root = realpath(get_stylesheet_directory_uri());
-		if ( 0 === strpos($path, $root) ) {
+		$root = realpath(get_stylesheet_directory());
+
+		if ( false === $root ) {
+			return false;
+		}
+
+		if ( 0 === strpos($path, (string) $root) ) {
 			return true;
+		} else {
+			return false;
 		}
 	}
 
@@ -430,11 +499,10 @@ class ImageHelper {
 		if ( !empty($subdir) ) {
 			$url .= $subdir;
 		}
-		$url .= '/'.$filename;
+		$url = untrailingslashit($url).'/'.$filename;
 		if ( !$absolute ) {
 			$url = str_replace(site_url(), '', $url);
 		}
-		// $url = TimberURLHelper::remove_double_slashes( $url);
 		return $url;
 	}
 
@@ -464,7 +532,7 @@ class ImageHelper {
 			$subdir = URLHelper::url_to_file_system($subdir);
 		}
 		$subdir = self::maybe_realpath($subdir);
-		
+
 		$path = '';
 		if ( self::BASE_UPLOADS == $base ) {
 			//it is in the Uploads directory
@@ -531,11 +599,11 @@ class ImageHelper {
 			$au['subdir'],
 			$au['basename']
 		);
-		
+
 		$new_url = apply_filters('timber/image/new_url', $new_url);
 		$destination_path = apply_filters('timber/image/new_path', $destination_path);
 		// if already exists...
-		if ( file_exists($destination_path) ) {
+		if ( file_exists($source_path) && file_exists($destination_path) ) {
 			if ( $force || filemtime($source_path) > filemtime($destination_path) ) {
 				// Force operation - warning: will regenerate the image on every pageload, use for testing purposes only!
 				unlink($destination_path);

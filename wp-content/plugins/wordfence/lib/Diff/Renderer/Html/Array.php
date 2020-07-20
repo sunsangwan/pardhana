@@ -40,7 +40,7 @@
  * @link http://github.com/chrisboulton/php-diff
  */
 
-require_once dirname(__FILE__).'/../Abstract.php';
+require_once(dirname(__FILE__) . '/../Abstract.php');
 
 class Diff_Renderer_Html_Array extends Diff_Renderer_Abstract
 {
@@ -150,7 +150,7 @@ class Diff_Renderer_Html_Array extends Diff_Renderer_Abstract
 	{
 		$start = 0;
 		$limit = min(strlen($fromLine), strlen($toLine));
-		while($start < $limit && $fromLine{$start} == $toLine{$start}) {
+		while($start < $limit && $fromLine[$start] == $toLine[$start]) {
 			++$start;
 		}
 		$end = -1;
@@ -190,7 +190,8 @@ class Diff_Renderer_Html_Array extends Diff_Renderer_Abstract
 	 */
 	private function fixSpacesCallback($matches)
 	{
-		return $this->fixSpaces($matches[1]);
+		$spaces = (isset($matches[1]) ? $matches[1] : '');
+		return $this->fixSpaces($spaces);
 	}
 
 	/**

@@ -1,0 +1,105 @@
+.footerCt {
+	> .inner {
+		padding: 30px 0 15px;
+		color: #333333;
+		font-size: 12px;
+		font-family: 'roboto_slabregular';
+		background-color: #f5f5ed;
+		border-top: 1px solid #e6e6da;
+		border-bottom: 10px solid #922525;
+
+		.section-right {
+			text-align: right;
+		}
+
+		ul {
+			li {
+				padding: 2px 0;
+			}
+		}
+
+		h4 {
+			margin: 0 0 10px;
+			font-size: 12px;
+			color: #922525;
+			font-family: 'roboto_slabbold';
+		}
+
+		a {
+			color: #333333;
+			font-size: 12px;
+			font-family: 'roboto_slabregular';
+		}
+
+		span {
+			margin-top: 12px;
+			display: block;
+		}
+
+		address {
+			margin: 0;
+		}
+
+		.social-icons {
+			padding-bottom: 12px;
+			margin-bottom: 5px;
+			border-bottom: 1px solid #e8e8d8;
+			i {
+				margin-left: 5px;
+				font-size: 32px;
+			}
+		}
+
+		.privacy-term {
+			span {
+				margin-top: 8px;
+				display: inline-block;
+			}
+		}
+
+		.needtechInc {
+			color: #922525;
+		}
+
+		.facebook-icon {
+			color: #3b5999;
+		}
+
+		.twitter-icon {
+			color: #00bbf5;
+		}
+
+		.linkedin-icon {
+			color: #1385c4;
+		}
+
+		.gogole-icon {
+			color: #d33f2d;
+		}
+
+		.vimeo-icon {
+			color: #5dc8ff;
+		}
+
+		@media screen and (max-width: 991px) {
+			.section-right {
+				text-align: left;
+				margin: 10px 0 0;
+			}
+
+			h4 {
+				margin: 10px 0;
+			}
+		}
+
+		@media screen and (max-width: 767px) {
+			>.container {
+				width: 300px;
+				
+				
+			}
+
+			
+		}
+	}
+}

@@ -48,12 +48,9 @@ class MWP_EventListener_PublicRequest_AutomaticLogin implements Symfony_EventDis
             return;
         }
 
-        if (!$this->configuration->getPublicKey()) {
-            // Site is not connected to a master instance.
-            return;
-        }
+        $isServiceSigned = !empty($request->query['service_sign']) && !empty($request->query['service_key']) && !empty($request->query['site_id']);
 
-        if (empty($request->query['auto_login']) || empty($request->query['signature']) || empty($request->query['message_id']) || !array_key_exists('mwp_goto', $request->query)) {
+        if (empty($request->query['auto_login']) || (empty($request->query['signature']) && !$isServiceSigned) || empty($request->query['message_id']) || !array_key_exists('mwp_goto', $request->query)) {
             return;
         }
 
@@ -61,7 +58,7 @@ class MWP_EventListener_PublicRequest_AutomaticLogin implements Symfony_EventDis
         $siteUrl           = $this->context->getSiteUrl();
         $isWww             = substr($request->server['HTTP_HOST'], 0, 4) === 'www.';
         $isHttps           = $this->context->isSsl();
-        $shouldWww         = (bool) preg_match('{^https?://www\.}', $siteUrl);
+        $shouldWww         = (bool)preg_match('{^https?://www\.}', $siteUrl);
         $shouldHttps       = $this->context->isSslAdmin();
         $alreadyRedirected = !empty($request->query['auto_login_fixed']);
         if (
@@ -97,13 +94,12 @@ class MWP_EventListener_PublicRequest_AutomaticLogin implements Symfony_EventDis
 
         $where = isset($request->query['mwp_goto']) ? $request->query['mwp_goto'] : '';
 
-        $signature = base64_decode($request->query['signature']);
         $messageId = $request->query['message_id'];
 
         $currentUser = $this->context->getCurrentUser();
 
         $adminUri    = rtrim($this->context->getAdminUrl(''), '/').'/'.$where;
-        $redirectUri = $this->modifyUriParameters($adminUri, $request->query, array('signature', 'username', 'auto_login', 'message_id', 'mwp_goto', 'mwpredirect', 'auto_login_fixed'));
+        $redirectUri = $this->modifyUriParameters($adminUri, $request->query, array('signature', 'username', 'auto_login', 'message_id', 'mwp_goto', 'mwpredirect', 'auto_login_fixed', 'service_sign', 'service_key', 'site_id'));
 
         if ($currentUser->user_login === $username) {
             try {
@@ -119,31 +115,54 @@ class MWP_EventListener_PublicRequest_AutomaticLogin implements Symfony_EventDis
             return;
         }
 
+        /** @handled function */
+        load_plugin_textdomain('worker');
+
         try {
             $this->nonceManager->useNonce($messageId);
         } catch (MWP_Security_Exception_NonceFormatInvalid $e) {
-            $this->context->wpDie(__("The automatic login token is invalid. Please try again, or, if this keeps happening, contact support.", 'worker'), '', 200);
+            $this->context->wpDie(esc_html__("The automatic login token is invalid. Please try again, or, if this keeps happening, contact support.", 'worker'), '', 200);
         } catch (MWP_Security_Exception_NonceExpired $e) {
-            $this->context->wpDie(__("The automatic login token has expired. Please try again, or, if this keeps happening, contact support.", 'worker'), '', 200);
+            $this->context->wpDie(esc_html__("The automatic login token has expired. Please try again, or, if this keeps happening, contact support.", 'worker'), '', 200);
         } catch (MWP_Security_Exception_NonceAlreadyUsed $e) {
-            $this->context->wpDie(__("The automatic login token was already used. Please try again, or, if this keeps happening, contact support.", 'worker'), '', 200);
+            $this->context->wpDie(esc_html__("The automatic login token was already used. Please try again, or, if this keeps happening, contact support.", 'worker'), '', 200);
         }
 
-        if ($secureKey = $this->configuration->getSecureKey()) {
-            // Legacy support, to be removed.
-            $verify = (md5($where.$messageId.$secureKey) === $signature);
+        $newComm   = $this->context->optionGet('mwp_new_communication_established', false);
+        $publicKey = null;
+        $message   = null;
+        $signed    = null;
+
+        if ($isServiceSigned && !empty($newComm)) {
+            $communicationKey = mwp_get_communication_key($request->query['site_id']);
+
+            if (empty($communicationKey)) {
+                $this->context->wpDie(esc_html__("Invalid site connection specified. Please try again, or, if this keeps happening, contact support.", 'worker'), '', 200);
+                return;
+            }
+
+            $publicKey = $this->configuration->getLivePublicKey($request->query['service_key']);
+            $message   = $communicationKey.$where.$messageId;
+            $signed    = base64_decode($request->query['service_sign']);
         } else {
-            $verify = $this->signer->verify($where.$messageId, $signature, $this->configuration->getPublicKey());
+            $publicKey = $this->configuration->getPublicKey();
+            $message   = $where.$messageId;
+            $signed    = base64_decode($request->query['signature']);
         }
 
-        if (!$verify) {
-            $this->context->wpDie(__("The automatic login token is invalid. Please check if this website is properly connected with your dashboard, or, if this keeps happening, contact support.", 'worker'), '', 200);
+        if (empty($publicKey) || empty($message) || empty($signed)) {
+            $this->context->wpDie(esc_html__('The automatic login token isn\'t properly signed. Please contact our support for help.', 'worker'), '', 200);
+        }
+
+        if (!$this->signer->verify($message, $signed, $publicKey)) {
+            $this->context->wpDie(esc_html__('The automatic login token is invalid. Please check if this website is properly connected with your dashboard, or, if this keeps happening, contact support.', 'worker'), '', 200);
         }
 
         $user = $this->context->getUserByUsername($username);
 
         if ($user === null) {
-            $this->context->wpDie(sprintf(__("User <strong>%s</strong> could not be found.", 'worker'), htmlspecialchars($username)), '', 200);
+            /* translators: the variable in this string is the WordPress username that could not be found */
+            $this->context->wpDie(sprintf(esc_html__("User <strong>%s</strong> could not be found.", 'worker'), htmlspecialchars($username)), '', 200);
         }
 
         $this->context->setCurrentUser($user);

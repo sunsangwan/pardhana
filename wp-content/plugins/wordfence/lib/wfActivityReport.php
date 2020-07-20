@@ -1,7 +1,7 @@
 <?php
+if (defined('WORDFENCE_VERSION')) {
 
 class wfActivityReport {
-	
 	const BLOCK_TYPE_COMPLEX = 'complex';
 	const BLOCK_TYPE_BRUTE_FORCE = 'bruteforce';
 	const BLOCK_TYPE_BLACKLIST = 'blacklist';
@@ -56,8 +56,15 @@ class wfActivityReport {
 	 * Send out the report and reschedule the next report's cron job.
 	 */
 	public static function executeCronJob() {
-		$report = new self();
-		$report->sendReportViaEmail(wfConfig::getAlertEmails());
+		if (!wfConfig::get('email_summary_enabled', 1)) {
+			return;
+		}
+		
+		$emails = wfConfig::getAlertEmails();
+		if (count($emails)) {
+			$report = new self();
+			$report->sendReportViaEmail($emails);
+		}
 		self::scheduleCronJob();
 	}
 
@@ -210,63 +217,24 @@ class wfActivityReport {
 		$groupingWHERE = '';
 		switch ($grouping) {
 			case self::BLOCK_TYPE_COMPLEX:
-				$groupingWHERE = ' AND blockType IN ("throttle", "fakegoogle", "badpost", "country", "advanced", "waf", "manual")';
+				$groupingWHERE = ' AND blockType IN ("fakegoogle", "badpost", "country", "advanced", "waf")';
 				break;
 			case self::BLOCK_TYPE_BRUTE_FORCE:
-				$groupingWHERE = ' AND blockType IN ("brute")';
+				$groupingWHERE = ' AND blockType IN ("throttle", "brute")';
 				break;
 			case self::BLOCK_TYPE_BLACKLIST:
-				$groupingWHERE = ' AND blockType IN ("blacklist")'; 
+				$groupingWHERE = ' AND blockType IN ("blacklist", "manual")';
 				break;
 		}
 		
+		$table_wfBlockedIPLog = wfDB::networkTable('wfBlockedIPLog');
 		$count = $this->db->get_var(<<<SQL
 SELECT SUM(blockCount) as blockCount
-FROM {$this->db->prefix}wfBlockedIPLog
+FROM {$table_wfBlockedIPLog}
 WHERE unixday >= {$interval}{$groupingWHERE}
 SQL
 			);
 		return $count;
-	}
-	
-	public function getBlacklistBlockedStats($maxAgeDays = null, $ips = null) {
-		$maxAgeDays = (int) $maxAgeDays;
-		if ($maxAgeDays <= 0) {
-			$interval = 'FLOOR(UNIX_TIMESTAMP(DATE_SUB(NOW(), interval 7 day)) / 86400)';
-			switch (wfConfig::get('email_summary_interval', 'weekly')) {
-				case 'daily':
-					$interval = 'FLOOR(UNIX_TIMESTAMP(DATE_SUB(NOW(), interval 1 day)) / 86400)';
-					break;
-				case 'monthly':
-					$interval = 'FLOOR(UNIX_TIMESTAMP(DATE_SUB(NOW(), interval 1 month)) / 86400)';
-					break;
-			}
-		}
-		else {
-			$interval = 'FLOOR(UNIX_TIMESTAMP(DATE_SUB(NOW(), interval ' . $maxAgeDays . ' day)) / 86400)';
-		}
-		
-		if ($ips !== null) {
-			foreach ($ips as &$ip) {
-				$ip = '"' . esc_sql($ip) . '"';
-			}
-			$ipsWHERE = ' AND IP IN (' . implode(',', $ips) . ')';
-		}
-		
-		$stats = $this->db->get_results(<<<SQL
-SELECT SUM(blockCount) as blockCount, IP, countryCode
-FROM {$this->db->prefix}wfBlockedIPLog
-WHERE unixday >= {$interval}{$ipsWHERE} GROUP BY IP
-SQL
-		, ARRAY_A);
-		
-		if ($stats) {
-			foreach ($stats as &$row) {
-				$row['countryName'] = $this->getCountryNameByCode($row['countryCode']);
-			}
-		}
-		
-		return $stats;
 	}
 
 	/**
@@ -290,10 +258,11 @@ SQL
 			$interval = 'FLOOR(UNIX_TIMESTAMP(DATE_SUB(NOW(), interval ' . $maxAgeDays . ' day)) / 86400)';
 		}
 		
+		$table_wfBlockedIPLog = wfDB::networkTable('wfBlockedIPLog');
 		$results = $this->db->get_results($this->db->prepare(<<<SQL
 SELECT *,
 SUM(blockCount) as blockCount
-FROM {$this->db->prefix}wfBlockedIPLog
+FROM {$table_wfBlockedIPLog}
 WHERE unixday >= {$interval}
 GROUP BY IP
 ORDER BY blockCount DESC
@@ -328,11 +297,11 @@ SQL
 		else {
 			$interval = 'FLOOR(UNIX_TIMESTAMP(DATE_SUB(NOW(), interval ' . $maxAgeDays . ' day)) / 86400)';
 		}
-		
+	  	
+		$table_wfBlockedIPLog = wfDB::networkTable('wfBlockedIPLog');
 		$results = $this->db->get_results($this->db->prepare(<<<SQL
 SELECT *, COUNT(IP) as totalIPs, SUM(blockCount) as totalBlockCount
-FROM {$this->db->base_prefix}wfBlockedIPLog
-WHERE unixday >= {$interval}
+FROM (SELECT * FROM {$table_wfBlockedIPLog} WHERE unixday >= {$interval} GROUP BY IP) t
 GROUP BY countryCode
 ORDER BY totalBlockCount DESC
 LIMIT %d
@@ -360,11 +329,12 @@ SQL
 				$interval = 'UNIX_TIMESTAMP(DATE_SUB(NOW(), interval 1 month))';
 				break;
 		}
-
+	  
+		$table_wfLogins = wfDB::networkTable('wfLogins');
 		$failedLogins = $this->db->get_results($this->db->prepare(<<<SQL
 SELECT wfl.*,
 sum(wfl.fail) as fail_count
-FROM {$this->db->base_prefix}wfLogins wfl
+FROM {$table_wfLogins} wfl
 WHERE wfl.fail = 1
 AND wfl.ctime > $interval
 GROUP BY wfl.username
@@ -375,45 +345,13 @@ SQL
 		
 		foreach ($failedLogins as &$login) {
 			$exists = $this->db->get_var($this->db->prepare(<<<SQL
-SELECT !ISNULL(ID) FROM {$this->db->base_prefix}users WHERE user_login = '%s' OR user_email = '%s'
+SELECT !ISNULL(ID) FROM {$this->db->users} WHERE user_login = '%s' OR user_email = '%s'
 SQL
 			, $login->username, $login->username));
 			$login->is_valid_user = $exists;
 		}
 		
 		return $failedLogins;
-	}
-
-	/**
-	 * Generate SQL from the whitelist. Uses the return format from wfUtils::getIPWhitelist
-	 *
-	 * @see wfUtils::getIPWhitelist
-	 * @param array $whitelisted_ips
-	 * @return string
-	 */
-	public function getBlockedIPWhitelistWhereClause($whitelisted_ips = null) {
-		if ($whitelisted_ips === null) {
-			$whitelisted_ips = wfUtils::getIPWhitelist();
-		}
-		if (!is_array($whitelisted_ips)) {
-			return false;
-		}
-
-		$where = '';
-
-		foreach ($whitelisted_ips as $ip_range) {
-			if (!is_a($ip_range, 'wfUserIPRange')) {
-				$ip_range = wfUtils::CIDR2wfUserIPRange($ip_range);
-			}
-
-			$where .= $ip_range->toSQL('IP') . ' OR ';
-		}
-		if ($where) {
-			// remove the extra ' OR '
-			$where = substr($where, 0, -4);
-		}
-
-		return $where;
 	}
 
 	/**
@@ -467,11 +405,12 @@ SQL
 	}
 
 	/**
-	 * Remove entries older than a week in the IP log.
+	 * Remove entries older than a month in the IP log.
 	 */
 	public function rotateIPLog() {
+		$table_wfBlockedIPLog = wfDB::networkTable('wfBlockedIPLog');
 		$this->db->query(<<<SQL
-DELETE FROM {$this->db->base_prefix}wfBlockedIPLog
+DELETE FROM {$table_wfBlockedIPLog}
 WHERE unixday < FLOOR(UNIX_TIMESTAMP(DATE_SUB(NOW(), interval 1 month)) / 86400)
 SQL
 		);
@@ -481,7 +420,7 @@ SQL
 	 * @param mixed $ip_address
 	 * @param int|null $unixday
 	 */
-	public static function logBlockedIP($ip_address, $unixday = null, $type = null, $count = 1) {
+	public static function logBlockedIP($ip_address, $unixday = null, $type = null) {
 		/** @var wpdb $wpdb */
 		global $wpdb;
 		
@@ -493,8 +432,8 @@ SQL
 			$ip_bin = $ip_address;
 			$ip_address = wfUtils::inet_ntop($ip_bin);
 		}
-
-		$blocked_table = "{$wpdb->base_prefix}wfBlockedIPLog";
+		
+		$blocked_table = wfDB::networkTable('wfBlockedIPLog');
 
 		$unixday_insert = 'FLOOR(UNIX_TIMESTAMP() / 86400)';
 		if (is_int($unixday)) {
@@ -509,10 +448,10 @@ SQL
 
 		$wpdb->query($wpdb->prepare(<<<SQL
 INSERT INTO $blocked_table (IP, countryCode, blockCount, unixday, blockType)
-VALUES (%s, %s, %d, $unixday_insert, %s)
-ON DUPLICATE KEY UPDATE blockCount = blockCount + VALUES(blockCount)
+VALUES (%s, %s, 1, $unixday_insert, %s)
+ON DUPLICATE KEY UPDATE blockCount = blockCount + 1
 SQL
-			, $ip_bin, $country, $count, $type));
+			, $ip_bin, $country, $type));
 	}
 
 	/**
@@ -522,7 +461,7 @@ SQL
 	public function getCountryNameByCode($code) {
 		static $wfBulkCountries;
 		if (!isset($wfBulkCountries)) {
-			include 'wfBulkCountries.php';
+			include(dirname(__FILE__) . '/wfBulkCountries.php');
 		}
 		return array_key_exists($code, $wfBulkCountries) ? $wfBulkCountries[$code] : "";
 	}
@@ -558,7 +497,19 @@ SQL
 	 */
 	public function sendReportViaEmail($email_addresses) {
 		$shortSiteURL = preg_replace('/^https?:\/\//i', '', site_url());
-		return wp_mail($email_addresses, 'Wordfence activity for ' . date_i18n(get_option('date_format')) . ' on ' . $shortSiteURL, $this->toEmailView()->__toString(), 'Content-Type: text/html');
+		
+		$content = $this->toEmailView()->__toString();
+		
+		$success = true;
+		if (is_string($email_addresses)) { $email_addresses = explode(',', $email_addresses); }
+		foreach ($email_addresses as $email) {
+			$uniqueContent = str_replace('<!-- ##UNSUBSCRIBE## -->', sprintf(__('No longer an administrator for this site? <a href="%s" target="_blank">Click here</a> to stop receiving security alerts.', 'wordfence'), wfUtils::getSiteBaseURL() . '?_wfsf=removeAlertEmail&jwt=' . wfUtils::generateJWT(array('email' => $email))), $content);
+			if (!wp_mail($email, 'Wordfence activity for ' . date_i18n(get_option('date_format')) . ' on ' . $shortSiteURL, $uniqueContent, 'Content-Type: text/html')) {
+				$success = false;
+			}
+		}
+		
+		return $success;
 	}
 
 	/**
@@ -612,9 +563,10 @@ class wfRecentFirewallActivity {
 	public function run() {
 		global $wpdb;
 		
+		$table_wfHits = wfDB::networkTable('wfHits');
 		$results = $wpdb->get_results($wpdb->prepare(<<<SQL
 SELECT attackLogTime, IP, URL, UA, actionDescription, actionData
-FROM {$wpdb->prefix}wfHits
+FROM {$table_wfHits}
 WHERE action = 'blocked:waf' AND attackLogTime > (UNIX_TIMESTAMP() - %d)
 ORDER BY attackLogTime DESC
 LIMIT %d
@@ -637,7 +589,7 @@ SQL
 				$paramKey = base64_decode($actionData['paramKey']);
 				$paramValue = base64_decode($actionData['paramValue']);
 				if (strlen($paramValue) > 100) {
-					$paramValue = substr($paramValue, 0, 100) . chr(2026);
+					$paramValue = substr($paramValue, 0, 100) . '...';
 				}
 				
 				if (preg_match('/([a-z0-9_]+\.[a-z0-9_]+)(?:\[(.+?)\](.*))?/i', $paramKey, $matches)) {
@@ -692,7 +644,7 @@ class wfRecentlyModifiedFiles extends wfDirectoryIterator {
 	public function __construct($directory = ABSPATH, $max_files_per_directory = 20000, $max_iterations = 250000, $time_range = 604800) {
 		parent::__construct($directory, $max_files_per_directory, $max_iterations);
 		$this->time_range = $time_range;
-		$excluded_directories = explode(',', (string) wfConfig::get('email_summary_excluded_directories'));
+		$excluded_directories = explode("\n", wfUtils::cleanupOneEntryPerLine(wfConfig::get('email_summary_excluded_directories', '')));
 		$this->excluded_directories = array();
 		foreach ($excluded_directories  as $index => $path) {
 			if (($dir = realpath(ABSPATH . $path)) !== false) {
@@ -768,10 +720,11 @@ class wfActivityReportView extends wfView {
 	 * @return string
 	 */
 	public function displayFile($file) {
-		if (stripos($file, ABSPATH) === 0) {
-			return substr($file, strlen(ABSPATH));
+		$realPath = realpath($file);
+		if (stripos($realPath, ABSPATH) === 0) {
+			return substr($realPath, strlen(ABSPATH));
 		}
-		return $file;
+		return $realPath;
 	}
 
 	/**
@@ -782,14 +735,14 @@ class wfActivityReportView extends wfView {
 		if ($unix_time === null) {
 			$unix_time = time();
 		}
-		return date_i18n('F j, Y g:ia', $unix_time);
+		return wfUtils::formatLocalTime('F j, Y g:ia', $unix_time);
 	}
 	
 	public function attackTime($unix_time = null) {
 		if ($unix_time === null) {
 			$unix_time = time();
 		}
-		return date_i18n('F j, Y', $unix_time) . "<br>" . date_i18n('g:ia', $unix_time);
+		return wfUtils::formatLocalTime('F j, Y', $unix_time) . "<br>" . wfUtils::formatLocalTime('g:ia', $unix_time);
 	}
 	
 	public function displayIP($binaryIP) {
@@ -797,4 +750,5 @@ class wfActivityReportView extends wfView {
 		$country = wfUtils::countryCode2Name(wfUtils::IP2Country($readableIP));
 		return "{$readableIP} (" . ($country ? $country : 'Unknown') . ")"; 
 	}
+}
 }

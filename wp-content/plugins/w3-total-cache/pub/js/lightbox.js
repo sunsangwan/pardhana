@@ -6,7 +6,7 @@ var W3tc_Lightbox = {
 	create: function() {
 		var me = this;
 
-		this.container = jQuery('<div class="' + this.options.id + '"><div class="lightbox-close">' + this.options.close + '</div><div class="lightbox-content"></div></div>').css({
+		this.container = jQuery('<div class="' + this.options.id + '"><div class="lightbox-close">' + this.options.close + '</div><div id="w3tc_lightbox_content" class="lightbox-content"></div></div>').css({
 			top: 0,
 			left: 0,
 			width: 0,
@@ -16,7 +16,7 @@ var W3tc_Lightbox = {
 			display: 'none'
 		});
 
-		jQuery('#w3tc').append(this.container);
+		jQuery('body').append(this.container);
 		me.resize();
 		this.window.resize(function() {
 			me.resize();
@@ -62,12 +62,14 @@ var W3tc_Lightbox = {
 
 			if (typeof ga != 'undefined') {
 				var w3tc_action = this.options.url.match(/w3tc_action=([^&]+)/);
-				if (w3tc_action && w3tc_action[1])
-					ga('send', 'pageview', 'overlays/' + w3tc_action[1]);
-				else {
-					var w3tc_action = this.options.url.match(/&(w3tc_[^&]+)&/);
+				if (window.w3tc_ga) {
 					if (w3tc_action && w3tc_action[1])
-						ga('send', 'pageview', 'overlays/' + w3tc_action[1]);
+						w3tc_ga('send', 'pageview', 'overlays/' + w3tc_action[1]);
+					else {
+						var w3tc_action = this.options.url.match(/&(w3tc_[^&]+)&/);
+						if (w3tc_action && w3tc_action[1])
+							w3tc_ga('send', 'pageview', 'overlays/' + w3tc_action[1]);
+					}
 				}
 			}
 		}
@@ -89,6 +91,11 @@ var W3tc_Lightbox = {
 	resize: function() {
 		var width = (this.options.width ? this.options.width : this.window.width() * this.options.widthPercent);
 		var height = (this.options.height ? this.options.height : this.window.height() * this.options.heightPercent);
+
+		if (!this.options.maxWidth)
+			this.options.maxWidth = this.window.width();
+		if (!this.options.maxHeight)
+			this.options.maxHeight = this.window.height();
 
 		if (this.options.maxWidth && width > this.options.maxWidth) {
 			width = this.options.maxWidth;
@@ -145,8 +152,8 @@ var W3tc_Lightbox = {
 		var v = jQuery(form_selector).find('input').each(function(i) {
 			var name = jQuery(this).attr('name');
 			var type = jQuery(this).attr('type');
-			if (type == 'radio') {
-				if (!jQuery(this).attr('checked'))
+			if (type == 'radio' || type == 'checkbox' ) {
+				if (!jQuery(this).prop('checked'))
 					return;
 			}
 
@@ -375,13 +382,23 @@ function w3tc_lightbox_self_test(nonce) {
 	});
 }
 
-function w3tc_lightbox_upgrade(nonce) {
-  W3tc_Lightbox.open({
-	id: 'w3tc-overlay',
-	close: '',
-	width: 800,
-	height: 350,
-	url: 'admin.php?page=w3tc_dashboard&w3tc_licensing_upgrade&_wpnonce=' + nonce,
+function w3tc_lightbox_upgrade(nonce, data_src, renew_key) {
+	var client_id = '';
+	if (window.w3tc_ga) {
+		w3tc_ga(function(tracker) {
+			client_id = tracker.get('clientId');
+		});
+	}
+
+  	W3tc_Lightbox.open({
+		id: 'w3tc-overlay',
+		close: '',
+		width: 800,
+		height: 350,
+		url: 'admin.php?page=w3tc_dashboard&w3tc_licensing_upgrade&_wpnonce=' +
+		encodeURIComponent(nonce) + '&data_src=' + encodeURIComponent(data_src) +
+		(renew_key ? '&renew_key=' + encodeURIComponent(renew_key) : '') +
+		(client_id ? '&client_id=' + encodeURIComponent(client_id) : ''),
 	callback: function(lightbox) {
 		lightbox.options.height = jQuery('#w3tc-upgrade').height() - 57;
 		jQuery('.button-primary', lightbox.container).click(function() {
@@ -389,18 +406,31 @@ function w3tc_lightbox_upgrade(nonce) {
 		});
 		jQuery('#w3tc-purchase', lightbox.container).click(function() {
 			lightbox.close();
-			w3tc_lightbox_buy_plugin(nonce);
+			w3tc_lightbox_buy_plugin(nonce, data_src, renew_key, client_id);
+		});
+		jQuery('#w3tc-purchase-link', lightbox.container).click(function() {
+			lightbox.close();
+
+			jQuery([document.documentElement, document.body]).animate({
+				scrollTop: jQuery("#licensing").offset().top
+			}, 2000);
 		});
 		lightbox.resize();
 	}
   });
 }
 
-function w3tc_lightbox_buy_plugin(nonce) {
+function w3tc_lightbox_buy_plugin(nonce, data_src, renew_key, client_id) {
 	W3tc_Lightbox.open({
 		width: 800,
 		minHeight: 350,
-		url: 'admin.php?page=w3tc_dashboard&w3tc_licensing_buy_plugin&_wpnonce=' + nonce,
+		maxWidth: jQuery(window).width() - 40,
+		maxHeight: jQuery(window).height() - 40,
+		url: 'admin.php?page=w3tc_dashboard&w3tc_licensing_buy_plugin' +
+			'&_wpnonce=' + encodeURIComponent(nonce) +
+			'&data_src=' + encodeURIComponent(data_src) +
+			(renew_key ? '&renew_key=' + encodeURIComponent(renew_key) : '') +
+			(client_id ? '&client_id=' + encodeURIComponent(client_id) : ''),
 		callback: function(lightbox) {
 			var w3tc_license_listener = function(event) {
 				if (event.origin.substr(event.origin.length - 12) !== ".w3-edge.com")
@@ -454,101 +484,6 @@ function w3tc_lightbox_save_licence_key(license_key, nonce, callback) {
   }, 'json').fail(callback);
 }
 
-function w3tc_lightbox_cdn_s3_bucket_location(type, nonce) {
-	W3tc_Lightbox.open({
-		width: 500,
-		height: 130,
-		url: 'admin.php?page=w3tc_dashboard&w3tc_cdn_s3_bucket_location&type=' + type + '&_wpnonce=' + nonce,
-		callback: function(lightbox) {
-			jQuery('.button', lightbox.container).click(function() {
-				lightbox.close();
-			});
-		}
-	});
-}
-
-function w3tc_lightbox_netdna_maxcdn_pull_zone(type, nonce) {
-	W3tc_Lightbox.open({
-		width: 500,
-		height: 400,
-		url: 'admin.php?page=w3tc_dashboard&w3tc_cdn_create_netdna_maxcdn_pull_zone_form&type=' + type + '&_wpnonce=' + nonce,
-		callback: function(lightbox) {
-			jQuery('#create_pull_zone', lightbox.container).click(function() {
-				var loader = jQuery('#pull-zone-loading');
-				loader.addClass('w3tc-loading');
-				var pull_button = jQuery(this);
-				pull_button.attr("disabled", "disabled");
-				jQuery('.create-error').text('');
-				var name_val = jQuery('#name', lightbox.container).val();
-				var name_filter = /^[a-zA-Z\d\-]*$/;
-				if (name_val == '') {
-					jQuery('#name', lightbox.container).addClass('w3tc-error');
-					jQuery('.name_message', lightbox.container).text('Cannot be empty.');
-				} else if(name_val.length < 3) {
-					jQuery('#name', lightbox.container).addClass('w3tc-error');
-					jQuery('.name_message', lightbox.container).text('Too short.');
-				} else if (name_val.length > 32) {
-					jQuery('#name', lightbox.container).addClass('w3tc-error');
-					jQuery('.name_message', lightbox.container).text('Too long.');
-				} else if (!name_filter.test(name_val)) {
-					jQuery('#name', lightbox.container).addClass('w3tc-error');
-					jQuery('.name_message', lightbox.container).text('Cannot use unsupported characters.');
-				} else {
-					jQuery('#name', lightbox.container).removeClass('w3tc-error');
-					jQuery('.name_message', lightbox.container).text('');
-				}
-
-				var label_val = jQuery('#label', lightbox.container).val();
-				if (label_val == '') {
-					jQuery('#label', lightbox.container).addClass('w3tc-error');
-					jQuery('.label_message', lightbox.container).text('Cannot be empty.');
-				} else if(label_val.length < 1) {
-					jQuery('#label', lightbox.container).addClass('w3tc-error');
-					jQuery('.label_message', lightbox.container).text('Too short.');
-				} else if (label_val.length > 255) {
-					jQuery('#label', lightbox.container).addClass('w3tc-error');
-					jQuery('.label_message', lightbox.container).text('Too long.');
-				} else {
-					jQuery('#label', lightbox.container).removeClass('w3tc-error');
-					jQuery('.label_message', lightbox.container).text('');
-				}
-				if (!jQuery('#label').hasClass('w3tc-error') && !jQuery('#name').hasClass('w3tc-error')) {
-					jQuery.post('admin.php?page=w3tc_dashboard&w3tc_cdn_create_netdna_maxcdn_pull_zone', {name:name_val, label: label_val, nonce: jQuery('#_wp_nonce').val(), type: type},function(data) {
-							loader.removeClass('w3tc-loading');
-							if (data['status'] == 'error') {
-								jQuery('.create-error').show();
-								jQuery('.create-error').html('<p>Something is wrong:<br />' + data['message'] + '</p>');
-								pull_button.removeAttr("disabled");
-							} else {
-								if (jQuery('#cdn_cnames > :first-child > :first-child').val() == '') {
-									jQuery('#cdn_cnames > :first-child > :first-child').val(data['temporary_url']);
-									jQuery('.netdna-maxcdn-form').html('<p>Pull zone was successfully created. Following url was added as default "Replace site\'s hostname with:" '
-									  + data['temporary_url']
-									  + '</p><p><input class="button-primary" onclick="window.location = \'admin.php?page=w3tc_dashboard&w3tc_cdn_save_activate&_wpnonce=' + nonce + '\'" value="Save, Activate & Close" />'
-									  + '</p>'
-									);
-								} else {
-									jQuery('.netdna-maxcdn-form').html('<p>Pull zone was successfully created. cnames were already set so "Replace site\'s hostname with:" were not replaced with '
-									  + data['temporary_url']
-									  + '</p><p><input class="button-primary" onclick="window.location = \'admin.php?page=w3tc_dashboard&w3tc_cdn_save_activate&_wpnonce=' + nonce + '\'" value="Save, Activate & Close" />'
-									  + '</p>'
-									);
-								}
-							}
-						},
-					'json');
-				} else {
-					loader.removeClass('w3tc-loading');
-					pull_button.removeAttr("disabled");
-				}
-			});
-			jQuery('.button', lightbox.container).click(function() {
-				lightbox.close();
-			});
-		}
-	});
-}
-
 jQuery(function() {
 	jQuery('.button-minify-recommendations').click(function() {
 		var nonce = jQuery(this).metadata().nonce;
@@ -563,29 +498,15 @@ jQuery(function() {
 	});
 
 	jQuery('.button-buy-plugin').click(function() {
-		w3tc_lightbox_upgrade(w3tc_nonce);
-		jQuery('#w3tc-license-instruction').show();
-		return false;
-	});
-
-	jQuery('.button-cdn-s3-bucket-location,.button-cdn-cf-bucket-location').click(function() {
-		var type = '';
-		var nonce = jQuery(this).metadata().nonce;
-
-		if (jQuery(this).hasClass('cdn_s3')) {
-			type = 's3';
-		} else if (jQuery(this).hasClass('cdn_cf')) {
-			type = 'cf';
+		var data_src = jQuery(this).attr('data-src');
+		var nonce = jQuery(this).attr('data-nonce');
+		if (!nonce) {
+			nonce = w3tc_nonce;
 		}
+		var renew_key = jQuery(this).attr('data-renew-key');
 
-		w3tc_lightbox_cdn_s3_bucket_location(type, nonce);
-		return false;
-	});
-
-	jQuery('#netdna-maxcdn-create-pull-zone').click(function() {
-		var type = jQuery(this).metadata().type;
-		var nonce = jQuery(this).metadata().nonce;
-		w3tc_lightbox_netdna_maxcdn_pull_zone(type, nonce);
+		w3tc_lightbox_upgrade(nonce, data_src, renew_key);
+		jQuery('#w3tc-license-instruction').show();
 		return false;
 	});
 

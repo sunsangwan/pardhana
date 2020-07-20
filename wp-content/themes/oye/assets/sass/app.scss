@@ -1,0 +1,271 @@
+// @import "node_modules/bootstrap-sass/assets/stylesheets/bootstrap";
+
+@import "_global";
+@import "_loader";
+@import "../assets/css/fonts.css";
+@import "_header";
+@import "_footer";
+@import "_biocv";
+@import "_courses";
+@import "_paris-secrets";
+
+.bg-lightbrown {
+	background: #f5f5ed;
+}
+
+.color-darkgrey {
+	color: #474747;
+}
+
+.main-inner {
+	padding: 50px 0;
+}
+
+.block-info {
+	background: #f5f5ed;
+	padding: 15px;
+    height: 630px;
+    overflow-y: auto;
+	p {
+		font-size: 14px;	
+	}
+	.featured_home_img {
+		height: 200px;
+		background-size: contain;
+	    background-repeat: no-repeat;
+	    background-position: center;		
+	}
+	.bgimage {
+		height: 200px;
+		background-size: contain;
+	    background-repeat: no-repeat;
+	    background-position: center;
+	}
+
+	.description {
+		font-size: 14px;
+		min-height: 260px;		
+		a {
+			color: #922525;
+		}
+		p {
+			font-size: 15px;
+		}
+	}
+
+	&.white {
+	    background: #fff;
+	    height: 630px;
+	    overflow-y: auto;
+
+		.heading {
+			color: #474747;
+		}
+	}
+	@media screen and (max-width: 991px) { 
+		height: auto;
+
+		.description {
+			min-height: auto;
+		}
+	}
+}
+
+
+article {
+
+	a {
+		color: #922525;
+		text-decoration: underline;
+	}
+}
+
+/* Lecture Page */
+
+.lectureCt {
+	iframe {
+	    max-width: 100%;
+	}
+	.lecture_accordion {
+
+		.ui-state-active {
+			border: none;
+		}
+		h2 {
+		    color: #922525;
+		    font-size: 18px;
+		    font-family: 'roboto_slabregular';
+		}
+		.ui-state-default {
+			outline: none;
+		    padding: 20px 30px 15px;
+		}
+		.ui-accordion-content {
+		    background: #f4f4e9;
+		    border: none;
+		    border-top: 2px solid #ecece0;
+		}
+		.ui-state-default:hover, 
+		.ui-state-default:active, 
+		.ui-state-default:focus, 
+		.ui-state-default {
+			background: #f4f4e9;
+			border: none;
+		    outline: none;
+		}
+		.ui-accordion-header .ui-accordion-header-icon {
+			right: 17px;
+		    left: auto;
+		    background: url(../images/acc-plusicon.png) no-repeat;
+			background-size: 20px;
+		    padding: 15px;
+		}
+		.ui-state-active .ui-accordion-header-icon {
+		    background: url(../images/acc-minusicon.png) no-repeat;
+			background-size: 20px;
+
+		}
+	}	
+}
+.videoCt {
+	.main-inner {
+		padding-bottom: 6px; 
+	}
+	iframe {
+	    max-width: 100%;
+	}	
+	.video_featured_img {
+		height: 200px;
+	    background-size: cover;
+	    background-position: center;
+	}
+}
+.page-template-page-home {
+	.main-inner {
+		padding-top: 0; 
+	}
+
+}
+
+.homeCt {
+	.block-info {
+		h3 {
+			text-transform: uppercase;
+			margin-top: 0;
+			margin-bottom: 17px; 
+		    margin-top: 12px;
+		}
+		a.btn-download {
+			text-transform: uppercase;			
+		}
+	}
+	
+	.event_accordion {
+		.ui-state-active {
+			border: none;
+		}
+		h2 {
+		    color: #922525;
+		    font-size: 16px;
+		    font-family: 'roboto_slabregular';
+			
+			.col-md-5 {
+				display: table;
+
+				span {
+				    color: #922525;
+					display: table-cell;
+				    vertical-align: middle;
+				    width: 100%;
+				}
+
+				>span:nth-child(1) {
+					float: left;
+					line-height: 1.75;
+					border-radius: 50%;
+					height: 28px;
+					width: 28px;
+					color: #fff;
+					background-color: #922525;
+					text-align: center;
+					margin-right: 10px;
+					display: inline-block;
+				}
+			}
+
+			.col-md-2 {
+			    padding-left: 20px;
+			    color: #333333;
+			}
+			.col-md-2:nth-child(2) {
+			    background: url(../images/locatie.png) no-repeat;
+			    background-size: 12px;
+			}	
+			.col-md-2:nth-child(3) {
+			    background: url(../images/calender.png) no-repeat;
+			    background-size: contain;
+			}	
+			.col-md-2:nth-child(4) {
+			    background: url(../images/clock.png) no-repeat;
+			    background-size: contain;
+			}	
+			@media screen and (max-width: 991px) { 
+				.col-md-2 {
+				    margin: 10px 52px;
+				}
+			}
+		} 
+		.ui-state-default {
+			outline: none;
+		    padding: 20px 17px 15px;
+		}
+		.ui-accordion-content {
+		    background: #f4f4e9;
+		    border: none;
+		    border-top: 2px solid #ecece0;
+		    p {
+		    	font-size: 15px;
+		    	line-height: 19px;
+		    	font-family: 'roboto_slabregular';
+		    }
+		}
+		.ui-state-default:hover, 
+		.ui-state-default:active, 
+		.ui-state-default:focus, 
+		.ui-state-default {
+			background: #f4f4e9;
+			border: none;
+		    outline: none;
+		}
+		.ui-accordion-header .ui-accordion-header-icon {
+			right: 17px;
+		    left: auto;
+		    background: url(../images/acc-plusicon.png) no-repeat;
+			background-size: 20px;
+		    padding: 15px;
+		}
+		.ui-state-active .ui-accordion-header-icon {
+		    background: url(../images/acc-minusicon.png) no-repeat;
+			background-size: 20px;
+
+		}
+	}	
+}
+
+/* Podcast CSS ------------ */
+.podcastCt {
+
+	.content-section {
+
+		h1, h2, h3, h4, h5, h6 {
+			text-transform: uppercase;
+		}
+	}
+}
+
+.videoall , articlesall , .booksall {
+	.col-md-4:nth-child(3n+1) {
+		clear: both;
+	}
+}
+
