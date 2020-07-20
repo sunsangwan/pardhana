@@ -1,0 +1,9 @@
+{% include 'header.twig' with {'data': data.header} %}
+{% include 'banner.twig' with {'data': data.banner} %}
+<div id="main" data-overview="{{post.id}}">
+	<div class="main" id="main-inner">
+		 {% block content %}{% endblock %}
+	</div>
+</div>
+
+{% include 'footer.twig' with {'data': data.footer} %}

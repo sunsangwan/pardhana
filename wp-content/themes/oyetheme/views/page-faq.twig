@@ -1,0 +1,18 @@
+{% extends "layout-page.twig" %}
+{% block content %}
+	<div class="accordion-container container">
+		<div class="row">
+			<div class="col-md-12">
+				<div class="accordion" id="accordion">
+
+					{% set i = 1 %}
+					{% for postslist in data.postslist %}
+						<h3><a href="#">{{i}}. {{ postslist.post_title }}</a></h3>
+						<div><p>{{ postslist.post_content }} {{postslist.faqanswer}}</p></div>
+				 		{% set i = i + 1 %}
+			 		{% endfor %}
+			 	</div>
+			</div>
+		</div>	 		
+	</div>
+{% endblock %}

@@ -1,0 +1,47 @@
+<section class="section-testimonials {{class}}">
+	<div class="testimonials-inner">
+		<div class="container">
+			<div class="row">
+				<div class="col-md-12">
+					<h2>{{testimonial_heading}}</h2>
+					<p class="testimonials-p1">
+						{{testimonial_sub_heading}}
+					</p>
+					<div class="row">
+						<div class="col-sm-12 col-md-12 col-lg-12">
+							<div class="row11 testimonial-carousel owl-carousel owl-theme">
+								{% for testimonial in testimonials %}
+								  <div class="col-md-411 testimonials-star-div testimonial-carousel__item">
+									<!-- <h4>"{{ testimonial.post_title }}"</h4> -->
+									<div class="row testimonials-star-div-row">
+										{% for i in 1..testimonial.rating %}
+										    <img src="{{theme.link}}/images/star-on.png"/>
+										{% endfor %}
+										{% for j in 0..5-(testimonial.rating) %}
+											{% if j > 0 %}
+										    <img src="{{theme.link}}/images/star-off.png"/>
+											{% endif %}
+										{% endfor %}
+									</div>
+									<div>
+										<p class="testimonials-content italic">
+											{{ testimonial.description }}
+										</p>
+										<p class="testimonials-date">
+											<span>{{ testimonial.testimonial_date|date("m/d") }}</span>
+											|
+											<span>
+												by {{ testimonial.author_name }}
+											</span>
+										</p>
+									</div>
+								  </div>
+								{% endfor %}
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</section>

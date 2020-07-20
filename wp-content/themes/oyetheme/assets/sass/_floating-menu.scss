@@ -1,0 +1,171 @@
+/* Header Interaction Button ---------------- */
+.slide-btn-section {
+	position: fixed;
+	right: 0;
+	top: 155px;
+	color: #fff;
+	font-size: 16px;
+	z-index: 58;
+
+	.social-icons {
+	    text-align: center;
+	    z-index: 100;
+
+		.slide-btn,
+		.slide-btn:active,
+		.slide-btn:focus {
+		    overflow: hidden;
+			display: block;
+		    width: auto;
+		    height: 45px;
+			line-height: 45px;
+		    white-space: nowrap;
+			background-color: transparent;
+			color: #000;
+			font-weight: 600;
+			text-transform: uppercase;
+
+		    > span {
+				/*width: 400px;*/
+				float: right;
+				display: block;
+				-webkit-transition: all 0.4s ease-in-out;
+				-moz-transition: all 0.4s ease-in-out;
+				-o-transition: all 0.4s ease-in-out;
+				transition: all 0.4s ease-in-out;
+			}
+			> span > span.text {
+				width: 0;
+				padding: 0;
+				float: right;
+				line-height: 45px;
+				background-color: rgba(255, 255, 255, 0.7);
+			    -webkit-transition: all 0.4s ease-in-out;
+				-moz-transition: all 0.4s ease-in-out;
+				-o-transition: all 0.4s ease-in-out;
+				transition: all 0.4s ease-in-out;
+				&.red {
+					background-color: red;
+				}
+				&.green {
+					background-color: green;
+				}
+			}
+			i {
+			    display: block;
+			    float: left;
+			    width: 45px;
+			    height: 45px;
+				font-size: 30px;
+			    line-height: 45px;
+			    font-size: 30px;
+			    background-repeat: no-repeat;
+			    background-position: center;
+			}
+			&.icon_phone {
+				i {
+					background-image: url("../images/icon-phone.png");
+				}
+			}
+			&.icon_email {
+				i {
+					background-image: url("../images/icon-email.png");
+				}
+			}
+			&.icon_address {
+				i {
+					background-image: url("../images/icon-address.png");
+				}
+			}
+			&.icon_hours {
+				i {
+					background-image: url("../images/icon-hours.png");
+				}
+			}
+			&.icon_estimate {
+				i {
+					background-image: url("../images/icon-estimate.png");
+				}
+			}
+			/*span .fa {
+				color: #fff;
+			}
+			span .fa-phone {
+				background-color: #2653a6;
+			}
+			span .fa-envelope-o {
+				background-color: #3a6cc9;
+			}
+			span .fa-pencil-square-o {
+				background-color: #c20001;
+			}
+			span .fa-facebook {
+				background-color: #3b5999;
+			}
+			span .fa-twitter {
+				background-color: #00bbf5;
+			}
+			span .fa-yelp {
+				background-color: #da262e;
+			}
+			span .fa-foursquare {
+				background-color: #f94877;
+			}*/
+			&:hover {
+				color: #000;
+				/*background-color: rgba(255, 255, 255, 0.7);*/
+				> span > span.text {
+					width: 120px;
+					padding: 0 25px 0 15px;
+				}
+			}
+			&.icon_phone:hover {
+				> span > span.text {
+					width: 152px;
+				}
+			}
+			&.icon_email:hover {
+				> span > span.text {
+					width: 255px;
+				}
+			}
+			&.icon_address:hover {
+				> span > span.text {
+					width: 320px;
+				}
+			}
+			&.icon_hours:hover {
+				> span > span.text {
+					width: 190px;
+				}
+			}
+			/*&.icon_facebook:hover {
+				> span > span.text {
+					width: 152px;
+				}
+			}
+			&.icon_twitter:hover {
+				> span > span.text {
+					width: 152px;
+				}
+			}
+			&.icon_yelp:hover {
+				> span > span.text {
+					width: 152px;
+				}
+			}
+			&.icon_foursquare:hover {
+				> span > span.text {
+					width: 152px;
+				}
+			}*/
+		}
+	}
+}
+
+
+@media screen and (max-width: 1199px) {
+	.slide-btn-section {
+		display: none;
+	}
+}

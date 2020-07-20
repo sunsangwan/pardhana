@@ -1,0 +1,29 @@
+<div id="main" data-overview="{{post.id}}">
+	<div class="main" id="main-inner">
+		<div class="privacyPolicyCt-header">
+			<div class="privacyPolicyCt-header-inner trans">
+				<div class="privacyPolicyCt-header-overlay" style="background-image: url('{{data.header_background_image_url}}')">
+					<div class="privacyPolicyCt-header-content container">
+						<h1>{{data.header_title}}</h1>
+						<div class="privacy_pdf">
+							<a id="$post->ID-download-privacy-pdfBtn" class="download-privacy-pdfBtn trans" href="{{data.download_pdf_button_link}}" target="_blank">{{data.download_pdf_button_title}}</a>
+							<a id="privacy-backbtn" href="{{data.back_button_url}}" class="policy-backBtn trans">{{data.back_button_title}}</a>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="klantenservice-pop-up">
+			<div class="container privacyPolicyCt">
+				<div class="row margin0">
+					<div class="col-md-12">
+						<div class="privacyPolicyCt-inner">
+							{{post.content}}
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>

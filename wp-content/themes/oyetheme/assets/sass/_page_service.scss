@@ -1,0 +1,153 @@
+.page-template-page-service  {
+	.section-repair-menufacture {
+		.img-wrapper {
+			height: 285px;
+			background-repeat: no-repeat;
+			background-position: center;
+			background-size: cover;
+		}
+		.content-wrapper {
+			min-height: 225px;
+			h3 {
+				margin: 0 0 20px;
+			}
+		}
+		@media screen and (min-width: 992px) and (max-width: 1199px) {
+			.img-wrapper {
+				height: 310px;
+			}
+		}
+		@media screen and (max-width: 991px) {
+			.img-wrapper {
+				margin-bottom: 20px;
+			}
+		}
+	}
+	.brandsTab-section {
+		.image-box {
+			width: 100%;
+			height: 50px;
+			/*background-color: red;*/
+			display: inline-block;
+			position: relative;
+			vertical-align: middle;
+
+			.image {
+				position: absolute;
+				width: 100%;
+				height: 100%;
+				left: 0;
+				top: 0;
+				/*background-color: green;*/
+				background-size: 70%;
+				background-repeat: no-repeat;
+				background-position: center;
+				-webkit-transition: all 0.2s ease-in-out;
+				-moz-transition: all 0.2s ease-in-out;
+				-o-transition: all 0.2s ease-in-out;
+				transition: all 0.2s ease-in-out;
+
+				&.hover {
+					opacity: 0;
+				}
+			}
+
+		}
+
+		.model-list {
+				li {
+					width: 25%;
+					padding: 10px 0;
+					float: left;
+					
+						display: block;
+						padding-left: 25px;
+						background: url('../images/icons/li-icon.png') no-repeat left center;
+						&:hover, &:focus {
+							color: #c2151c;
+							background-image: url('../images/icons/li-icon-red.png');
+						}
+					
+				}
+			}
+
+		.nav-tabs {
+			border-bottom: 5px solid #c50f16;
+			> li {
+				width: 20%;
+				border: none;
+
+				a {
+					padding: 15px 15px;
+					border: none;
+					border-radius: 3px 3px 0 0;
+				}
+
+				
+		
+				&.active {
+					a, a:hover, a:focus {
+						background-color: #c50f16;
+					}
+					.image-box {
+						
+						.image {
+							opacity: 0;
+
+							&.hover {
+								/*background-color: red;*/
+								opacity: 1;
+							}
+						}
+					}
+				}
+			}
+		}
+		.tab-content {
+			padding: 40px 0 40px 40px;
+			background-color: #f5f5f5;
+			overflow: auto;
+
+			
+		}
+	}
+
+
+	@media screen and (max-width: 1200px) {
+		.brandsTab-section {
+			.image-box {
+				.image {
+					background-size: contain;
+				}
+
+			}
+
+			.model-list {
+				li {
+					width: 33%;
+				}
+			}
+		}
+	}
+
+	@media screen and (max-width: 992px) {
+		.brandsTab-section {
+			.model-list {
+				li {
+					width: 50%;
+				}
+			}
+		}
+	}
+
+	@media screen and (max-width: 767px) {
+		.brandsTab-section {
+			.model-list {
+				padding: 0;
+				li {
+					width: 100%;
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,45 @@
+{% extends "layout-page.twig" %}
+{% block content %}
+
+<section class="section-how-we-can-help my50">
+	<div class="container">
+		<div class="row">
+			<div class="col-md-12">
+				<h2 class="text-center">{{data.how_we_can_help_heading}}</h2>
+				<p class="text-center">{{data.how_we_can_help_sub_heading}}</p>
+				<div class="row equipment-list mt50">
+					{% for equipment in data.equipments %}
+						<div class="col-md-3 col-sm-4">
+							<div class="block-equipment">
+								<a href="{{equipment.page_link}}" class="inner">
+									<div class="image-box">
+										<div class="image" style="background-image: url('{{equipment.equipment_logo}}')">
+										</div>
+										<div class="image hover" style="background-image: url('{{equipment.equipment_logo_active}}')">
+										</div>
+									</div>
+									<div class="title">{{equipment.post_title}}</div>
+								</a>
+							</div>
+						</div>	
+					{% endfor %}
+				</div>
+				<div class="brand_logo_container">
+					<ul class="list-inline">
+					{% for brand_logo in data.brand_logo_images %}
+						<li><img src="{{ brand_logo }}"></li>
+					{% endfor %}
+					</ul>
+				</div>
+			</div>
+		</div>
+	</div>
+</section>
+
+{% include 'block-estimate.twig' with {'data': data.getestimate} %}
+
+{% include 'block-testimonials.twig' with {'testimonial_heading': data.testimonial_heading, 'testimonial_sub_heading': data.testimonial_sub_heading, 'testimonials': data.testimonials} %}
+{% include 'block-contact-info.twig' with {'data': data.block_contact_info, 'class': 'bg-grey'} %}
+{% include 'block-contact-map.twig' with {'data': data.block_contact_info, 'homepage_map_image': data.homepage_map_image} %}
+
+{% endblock %}

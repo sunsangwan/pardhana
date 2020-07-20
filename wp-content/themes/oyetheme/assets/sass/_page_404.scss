@@ -1,0 +1,74 @@
+.page404-ct {
+	background-color: #3c65ac;
+	display: table;
+	width: 100%;
+	.inner {
+		display: table-cell;
+		text-align: center;
+		color: #fff;
+		h1 {
+			font-family: 'proxima_nova_thextrabold';
+			font-size: 172px;
+			font-weight: bold;
+			line-height: 0.7;
+		}
+		h6 {
+			font-family: 'proxima_nova_thextrabold';
+			font-size: 18px;
+			font-weight: bold;
+		}
+		a {
+			font-family: 'proxima_nova_ltsemibold';
+			color: #fff;
+		}
+		.text1 {
+			padding-top: 110px;
+			padding-bottom: 70px;
+		}
+		.text2 {
+			padding-bottom: 65px;
+			p {
+			font-size: 15px;
+			}
+			.f-italic {
+			font-style: italic;
+			}
+		}
+		.btn-go-home {
+			padding: 15px 25px;
+			border: 1px solid #fff;
+			&:hover {
+				background-color: #fff;
+				color: #3c65ac;
+			}
+		} 
+		.btn-contact {
+			padding: 15px 25px;
+			background-color: #c20001;
+			margin-left: 50px;
+			&:hover {
+				color: #c20001;
+				background-color: #fff;
+				border-color: #c20001;
+			}
+		} 
+		@media only screen and (max-width: 450px) {
+			h1 {
+				font-size: 120px;
+			}
+			.text1 {
+				padding-top: 50px;
+				padding-bottom: 40px;
+			}
+			.text2 {
+				padding-bottom: 40px;
+				p {
+					font-size: 12px;
+				}
+			}
+			.btn-contact {
+				margin-left: 20px;
+			}
+		}
+	}
+}

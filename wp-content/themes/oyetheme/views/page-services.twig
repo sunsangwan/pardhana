@@ -1,0 +1,79 @@
+{% extends "layout-page.twig" %}
+{% block content %}
+		<section class="section-repair-menufacture pt60 pb70 xs-pt30 xs-pb30">
+			<div class="container">
+				<div class="row">
+					{% if data.left_part_img %}
+						<div class="col-md-4">
+							<div class="img-wrapper" style="background-image: url({{data.left_part_img}})"></div>
+						</div>
+					{% endif %}
+					<div class="col-md-8">
+						{% if data.repair_content %}
+							<div class="content-wrapper">
+								{% if data.repair_title %}
+									<h3>{{data.repair_title}}</h3>
+								{% endif %}
+								{{data.repair_content}}
+							</div>
+						{% endif %}
+						{% if data.repair_content_link_text %}
+							<a href="{{data.repair_content_link}}" class="btn btn-blue">{{data.repair_content_link_text}}</a>
+						{% endif %}
+					</div>
+				</div>
+			</div>
+		</section>
+		{% if data.show_brand==1 %}
+			<section class="brandsTab-section">
+				<div class="container">
+					<div class="row">
+						<div class="col-md-12">
+							<div>
+								<ul id="myTab" class="nav nav-tabs" role="tablist">
+
+								{% for brand in data.brands %}
+								
+								    <li role="presentation" class="{{loop.index==1 ? 'active' : ''}}">
+								    	<a href="#post_{{loop.index }}" aria-controls="post_{{loop.index }}" role="tab" data-toggle="tab">
+								    		<div class="image-box">
+												<div class="image" style="background-image: url('{{brand.brand_logo_url}}')">
+												</div>
+												<div class="image hover" style="background-image: url('{{brand.brand_logo_active_url}}')">
+											</div>
+										</div>
+								    	</a>
+								    </li>
+								{% endfor %}    
+
+								</ul>
+								<div id="myTabContent" class="tab-content">
+									{% for brand in data.brands %}
+									    <div role="tabpanel" class="tab-pane {{loop.index==1 ? 'active' : ''}}" id="post_{{loop.index }}">
+									    	<ul class="model-list">
+												{% for brand_model in brand.brand_modelslist %}
+													<li>{{brand_model.oyemetatpl_brand_model}}</li>
+												{% endfor %}
+											</ul>
+										</div>								
+									{% endfor %}    
+								</div>	
+							</div>	
+						</div>
+					</div>
+				</div>
+			</section>
+		{% endif %}
+		{% if data.contactus_button_text %}
+			<section class="text-center py60">
+				<div class="container">
+					<div class="row">
+						<div class="col-md-12">
+							<div class="text-uppercase text-blue pb25">{{data.contactus_heading_text}}</div>
+							<a href="{{data.contactus_button_link}}" class="btn btn-blue">{{data.contactus_button_text}}</a>
+						</div>
+					</div>
+				</div>
+			</section>    
+		{% endif %}
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "layout-page.twig" %}
+{% block content %}
+    <section class="section-blog">
+		<div class="container">
+
+			<div class="row">
+				<div class="col-md-8">
+					<div class="row">
+						<div class="col-md-6 col-sm-6">
+							{% for post in posts %}
+								{% if loop.index<=3 %}
+							    	{% include 'block-blog.twig' with {'post': post} %}
+							    {% endif %}
+							{% endfor %}    
+						</div>
+						<div class="col-md-6 col-sm-6">
+							{% for post in posts %}
+								{% if loop.index>3 %}
+							    	{% include 'block-blog.twig' with {'post': post} %}
+							    {% endif %}
+							{% endfor %}    
+						</div>
+					</div>
+
+
+					<div class="tool-pagination">
+					    <ul class="pages">
+						    {% if pagination.prev %}
+						        <li><a href="{{pagination.prev.link}}" class="prev {{pagination.prev.link|length ? '' : 'invisible'}}">Prev</a></li>
+						    {% endif %}
+					        {% for page in pagination.pages %}
+					            <li>
+					                {% if page.link %}
+					                    <a href="{{page.link}}" class="{{page.class}}">{{page.title}}</a>
+					                {% else %}
+					                    <span class="{{page.class}}">{{page.title}}</span>
+					                {% endif %}
+					            </li>
+					        {% endfor %}
+						    {% if pagination.next %}
+						       <li> <a href="{{pagination.next.link}}" class="next {{pagination.next.link|length ? '' : 'invisible'}}">Next</a></li>
+						    {% endif %}
+					    </ul>
+					</div>
+
+				</div>
+
+				<div class="col-md-4">
+					<div class="row">
+						<div class="col-md-12 col-sm-6">
+							{% include 'block-blog-recent-posts.twig' with {'posts': data.recent_posts} %}
+						</div>
+						<div class="col-md-12 col-sm-6">
+							{% include 'block-blog-tags.twig' with {'tags': tags} %}
+						</div>
+
+						<div class="col-md-12 col-sm-6">
+							{% include 'block-newsletter-signupform.twig'  %}
+						</div>
+					</div>
+
+				</div>
+			</div>		
+		</div>
+	</section>						
+{% endblock %}

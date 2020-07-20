@@ -1,0 +1,6 @@
+{% extends "layout-page.twig" %}
+{% block content %}
+{% include 'block-contact-info.twig' with {'data': data.block_contact_info} %}
+{% include 'block-contact-map.twig' with {'data': data.block_contact_info, 'homepage_map_image': data.homepage_map_image} %}
+    
+{% endblock %}

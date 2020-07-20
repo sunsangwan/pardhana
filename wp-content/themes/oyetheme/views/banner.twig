@@ -1,0 +1,22 @@
+{% if data.header_bg_url %}
+<section class="section-header-banner section-header-banner--{{data.header_size}} section-header-banner--{{data.header_align}}"  style="background-image: url(' {{data.header_bg_url}}')">
+	<div class="section-header-banner__inner">
+		<div class="section-header-banner__inner__content">
+			<div class="article">
+				{% if data.header_title %}
+					<h1 class="header_title"> {{data.header_title}}</h1>
+				{% endif %}
+
+				{% if data.header_subtitle %}
+					<h4 class="header_subtitle"> {{data.header_subtitle}}</h4>
+				{% endif %}
+
+				{% if data.header_description %}
+					<div class="header_description"> {{data.header_description}}</div>
+				{% endif %}
+
+			</div>
+		</div>
+	</div>
+</section>
+{% endif %}

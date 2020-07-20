@@ -1,0 +1,27 @@
+<div id="cookie-popup">
+    <a href="javascript:void(0);" class="cookie-popup_close popup-close-btn"></a>
+	<h3 class="cookie-heading">{{message_title}}</h3>
+    <div class="cookie-top">{{message_description | raw}}</div>
+
+    <div id="cookie-accordian">
+		<ul class="cookie-accordian-inner">
+			{% for index,category in categories %}
+			    <li class="{{index==0 ? 'active' : ''}}">
+					<label><input type="radio" name="slide-cookie" value="{{category.term_id}}"><span>{{category.name}}</span></label>
+					<ul class="slide">
+						<li>{{category.description}}</li>
+					</ul>
+				</li>
+			{% endfor %}
+		</ul>
+	</div>
+	<div class="cookie-bottom">
+		<span class="cookies-btn"><a class="btn btn-white cookies-btn-link" href="javascript:void(0);" target="_self" hreflang="en">{{donotshowagain_title}}</a></span>
+	</div>
+</div>
+<div id="cookie-strip" style="display: none;">
+	<div class="cookie-strip-inner">
+		{{strip_we_accept_title}} <a class="show-cookie-popup" href="javascript:void(0);">{{strip_cookies_title}}</a> <a class="cookie-accept-btn" href="javascript:void(0);">{{strip_iagree_title}}</a>
+	</div>
+	<a href="javascript:void(0);" class="popup-strip-btn popup-close-btn"></a>
+</div>
